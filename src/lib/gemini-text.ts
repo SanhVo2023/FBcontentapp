@@ -271,11 +271,15 @@ export async function generateCampaignContent(
   contextType: string,
   contextDetail: string,
   brand: BrandConfig,
-  language: "vi" | "en" | "both" = "both"
+  language: "vi" | "en" | "both" = "both",
+  formats?: string[],
 ): Promise<GeneratedCampaign> {
   const langInst = language === "both"
     ? "Generate BOTH Vietnamese and English captions for each variant."
     : language === "vi" ? "Vietnamese captions only." : "English captions only.";
+
+  const formatList = formats?.length ? formats.join(", ") : "feed-square, feed-wide, story, carousel";
+  const variantCount = formats?.length || 4;
 
   const result = await heavy.generateContent(`You are a senior Facebook content strategist for a Vietnamese law firm. Your job is to create a complete content CAMPAIGN from a single idea.
 
@@ -290,11 +294,15 @@ ${contentIdea}
 Type: ${contextType}
 Details: ${contextDetail}
 
+## REQUIRED POST FORMATS
+Generate one variant for EACH of these formats: ${formatList}
+Total variants: ${variantCount}
+
 ## TASK
-Create a content campaign with 3-5 content VARIANTS. Each variant should be a different angle/format of the same idea:
+Create a content campaign. Each variant should be a different angle/format of the same idea:
 - Mix of content types: educational, authority, promotional, engagement
-- Mix of post formats: feed-square (1080x1080), feed-wide (1200x630), story (1080x1920), carousel (1080x1080)
 - Mix of visual styles: professional, bold, minimal, warm, dark-luxury, vibrant, editorial
+- Each variant uses a DIFFERENT post format from the required list above
 - Each variant targets a different aspect or audience segment
 
 ${langInst}
@@ -314,13 +322,13 @@ Return ONLY a JSON object:
       "image_prompt": "Detailed visual description for AI image generation. Scene, composition, lighting, mood. 2-3 sentences.",
       "content_type": "educational|authority|promotional|engagement",
       "style": "professional|bold|minimal|warm|dark-luxury|vibrant|editorial",
-      "post_type": "feed-square|feed-wide|story|carousel",
+      "post_type": "${formatList}",
       "service_area": "family-law|civil-disputes|land-real-estate|corporate|criminal|labor|commercial|foreign-investment|general"
     }
   ]
 }
 
-Generate exactly 4 variants with different angles. Return ONLY JSON.`);
+Generate exactly ${variantCount} variants. Each MUST use a different post_type from the required formats. Return ONLY JSON.`);
 
   const text = result.response.text().replace(/```json\n?/g, "").replace(/```/g, "").trim();
   return JSON.parse(text);

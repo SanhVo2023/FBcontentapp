@@ -48,9 +48,28 @@ export default function CreatePostPage() {
   const [contextType, setContextType] = useState<string>("content");
   const [contextDetail, setContextDetail] = useState("");
   const [campaignLanguage, setCampaignLanguage] = useState<"vi" | "en" | "both">("both");
+  const [selectedFormats, setSelectedFormats] = useState<Set<string>>(new Set(["feed-square", "feed-wide", "story"]));
   const [generating, setGenerating] = useState(false);
   const [generatedCampaign, setGeneratedCampaign] = useState<GeneratedCampaign | null>(null);
   const [editingVariants, setEditingVariants] = useState<CampaignVariant[]>([]);
+
+  const FB_FORMAT_OPTIONS = [
+    { value: "feed-square", label: "Feed Square", desc: "1080x1080", icon: "⬛" },
+    { value: "feed-wide", label: "Feed Wide", desc: "1200x630", icon: "🟦" },
+    { value: "story", label: "Story / Reel", desc: "1080x1920", icon: "📱" },
+    { value: "carousel", label: "Carousel", desc: "1080x1080", icon: "🎠" },
+    { value: "ad-square", label: "Ad Square", desc: "1080x1080", icon: "📢" },
+    { value: "ad-landscape", label: "Ad Wide", desc: "1200x628", icon: "📺" },
+    { value: "cover", label: "Cover Photo", desc: "820x312", icon: "🖼️" },
+  ];
+
+  const toggleFormat = (f: string) => {
+    setSelectedFormats((prev) => {
+      const n = new Set(prev);
+      n.has(f) ? n.delete(f) : n.add(f);
+      return n;
+    });
+  };
 
   // Scratch fields
   const [topic, setTopic] = useState("");
@@ -85,6 +104,7 @@ export default function CreatePostPage() {
       const data: GeneratedCampaign = await api("/api/ai-content", {
         action: "generate_campaign", brand, content_idea: contentIdea,
         context_type: contextType, context_detail: contextDetail, language: campaignLanguage,
+        formats: Array.from(selectedFormats),
       });
       setGeneratedCampaign(data);
       setEditingVariants(data.variants || []);
@@ -129,7 +149,7 @@ export default function CreatePostPage() {
             style: v.style || "professional",
             status: "draft",
           },
-          created_from: "campaign",
+          created_from: "scratch",
         });
       }
 
@@ -287,6 +307,20 @@ export default function CreatePostPage() {
                   <textarea value={contextDetail} onChange={(e) => setContextDetail(e.target.value)} rows={2} placeholder="Product details, promotion terms, reference links, specific requirements..." className="w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-amber-500/50 resize-none" />
                 </div>
 
+                {/* Content Format Selection */}
+                <div>
+                  <label className="text-xs text-gray-400 font-medium">Content Formats <span className="text-gray-600">({selectedFormats.size} selected)</span></label>
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {FB_FORMAT_OPTIONS.map((f) => (
+                      <button key={f.value} onClick={() => toggleFormat(f.value)} className={`px-2.5 py-1.5 rounded-lg text-[11px] transition flex items-center gap-1.5 ${selectedFormats.has(f.value) ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/50" : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"}`}>
+                        <span>{f.icon}</span>
+                        <span>{f.label}</span>
+                        <span className="text-[9px] opacity-60">{f.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button onClick={handleCampaignGenerate} disabled={generating || !contentIdea || !brand} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2">
                   {generating ? (
                     <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Generating Campaign...</>
@@ -308,52 +342,71 @@ export default function CreatePostPage() {
                   </div>
 
                   {/* Variant Cards with Facebook Mockups */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-5">
                     {editingVariants.map((v, idx) => {
                       const ct = CONTENT_TYPES.find((c) => c.value === v.content_type);
                       return (
-                        <div key={idx} className="bg-gray-900/70 border border-gray-800/50 rounded-xl overflow-hidden hover:border-gray-700 transition group">
-                          {/* Header bar */}
-                          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800/50">
-                            <span className="text-[10px] font-bold text-gray-400 bg-gray-800 w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</span>
+                        <div key={idx} className="group">
+                          {/* Label bar */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-gray-300">#{idx + 1}</span>
                             {ct && <span className={`${ct.color}/20 text-white text-[9px] px-1.5 py-0.5 rounded font-medium`}>{ct.emoji} {ct.label}</span>}
-                            <span className="text-[9px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{v.post_type}</span>
-                            <span className="text-[9px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{v.style}</span>
-                            <button onClick={() => removeVariant(idx)} className="ml-auto text-gray-600 hover:text-red-400 text-[10px] transition opacity-0 group-hover:opacity-100">Remove</button>
+                            <span className="text-[9px] text-gray-500">{v.title}</span>
+                            <button onClick={() => removeVariant(idx)} className="ml-auto text-gray-700 hover:text-red-400 text-[10px] transition opacity-0 group-hover:opacity-100">Remove</button>
                           </div>
 
-                          {/* Facebook Mockup Preview */}
-                          <div className="p-3">
-                            <FacebookMockup
-                              brandName={brand?.brand_name || "Brand"}
-                              brandLogo={brand?.logo}
-                              caption={v.caption_vi || v.caption_en || ""}
-                              headline={v.headline}
-                              subline={v.subline}
-                              cta={v.cta}
-                              postType={v.post_type}
-                              style={v.style}
-                              compact
-                            />
-                          </div>
+                          {/* Facebook Mockup */}
+                          <FacebookMockup
+                            brandName={brand?.brand_name || "Brand"}
+                            brandLogo={brand?.logo}
+                            caption={v.caption_vi || v.caption_en || ""}
+                            headline={v.headline}
+                            subline={v.subline}
+                            cta={v.cta}
+                            postType={v.post_type}
+                            style={v.style}
+                          />
 
                           {/* Editable fields (collapsible) */}
-                          <details className="border-t border-gray-800/50">
-                            <summary className="px-3 py-1.5 text-[10px] text-gray-500 cursor-pointer hover:text-gray-300 select-none">Edit content</summary>
-                            <div className="px-3 pb-3 space-y-1.5">
-                              <input value={v.title} onChange={(e) => updateVariant(idx, { title: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white font-medium" placeholder="Title" />
+                          <details className="mt-2 bg-gray-900/50 border border-gray-800/50 rounded-lg overflow-hidden">
+                            <summary className="px-3 py-2 text-[11px] text-gray-400 cursor-pointer hover:text-gray-200 select-none flex items-center gap-2">
+                              <svg className="w-3 h-3 transition-transform" style={{ transform: "rotate(0deg)" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                              Edit content & prompt
+                            </summary>
+                            <div className="px-3 pb-3 space-y-2 border-t border-gray-800/50 pt-2">
+                              <div>
+                                <label className="text-[9px] text-gray-500 uppercase">Title</label>
+                                <input value={v.title} onChange={(e) => updateVariant(idx, { title: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium mt-0.5" />
+                              </div>
                               {v.caption_vi !== undefined && (
-                                <textarea value={v.caption_vi || ""} onChange={(e) => updateVariant(idx, { caption_vi: e.target.value })} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-white resize-none" placeholder="Vietnamese caption" />
+                                <div>
+                                  <label className="text-[9px] text-gray-500 uppercase">Caption (VI)</label>
+                                  <textarea value={v.caption_vi || ""} onChange={(e) => updateVariant(idx, { caption_vi: e.target.value })} rows={4} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white resize-none mt-0.5" />
+                                </div>
                               )}
                               {v.caption_en !== undefined && (
-                                <textarea value={v.caption_en || ""} onChange={(e) => updateVariant(idx, { caption_en: e.target.value })} rows={2} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-white resize-none" placeholder="English caption" />
+                                <div>
+                                  <label className="text-[9px] text-gray-500 uppercase">Caption (EN)</label>
+                                  <textarea value={v.caption_en || ""} onChange={(e) => updateVariant(idx, { caption_en: e.target.value })} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white resize-none mt-0.5" />
+                                </div>
                               )}
-                              <div className="grid grid-cols-3 gap-1">
-                                <input value={v.headline} onChange={(e) => updateVariant(idx, { headline: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white font-bold" placeholder="Headline" />
-                                <input value={v.subline} onChange={(e) => updateVariant(idx, { subline: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white" placeholder="Subline" />
-                                <input value={v.cta} onChange={(e) => updateVariant(idx, { cta: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-blue-400" placeholder="CTA" />
+                              <div className="grid grid-cols-3 gap-2">
+                                <div><label className="text-[9px] text-gray-500 uppercase">Headline</label><input value={v.headline} onChange={(e) => updateVariant(idx, { headline: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-white font-bold mt-0.5" /></div>
+                                <div><label className="text-[9px] text-gray-500 uppercase">Subline</label><input value={v.subline} onChange={(e) => updateVariant(idx, { subline: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-white mt-0.5" /></div>
+                                <div><label className="text-[9px] text-gray-500 uppercase">CTA</label><input value={v.cta} onChange={(e) => updateVariant(idx, { cta: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-blue-400 mt-0.5" /></div>
                               </div>
-                              <textarea value={v.image_prompt} onChange={(e) => updateVariant(idx, { image_prompt: e.target.value })} rows={2} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-gray-300 resize-none" placeholder="Image prompt" />
+                              <div>
+                                <label className="text-[9px] text-gray-500 uppercase">Image Prompt</label>
+                                <textarea value={v.image_prompt} onChange={(e) => updateVariant(idx, { image_prompt: e.target.value })} rows={2} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-300 resize-none mt-0.5" />
+                              </div>
+                              <div className="flex gap-2">
+                                <select value={v.post_type} onChange={(e) => updateVariant(idx, { post_type: e.target.value })} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[10px] text-white">
+                                  {FB_FORMAT_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.icon} {f.label}</option>)}
+                                </select>
+                                <select value={v.style} onChange={(e) => updateVariant(idx, { style: e.target.value })} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[10px] text-white">
+                                  {["professional","bold","minimal","warm","dark-luxury","vibrant","editorial"].map((s) => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
                             </div>
                           </details>
                         </div>

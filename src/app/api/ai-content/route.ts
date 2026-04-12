@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
           body.context_type as string || "content",
           body.context_detail as string || "",
           brand,
-          (body.language as "vi" | "en" | "both") || "both"
+          (body.language as "vi" | "en" | "both") || "both",
+          body.formats as string[] | undefined,
         );
         return NextResponse.json(result);
       }
