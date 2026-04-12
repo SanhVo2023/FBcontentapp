@@ -29,7 +29,7 @@ export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig): strin
     `FACEBOOK OPTIMIZATION RULES:`,
     `- Text overlay must occupy LESS THAN 20% of total image area`,
     `- Keep ALL key content in the CENTER 80% of the image (safe zone for mobile crop)`,
-    `- LOGO: A brand logo has been provided as a reference image. Use it as a GUIDE for the brand identity only. Do NOT paste or overlay the logo directly onto the banner. Instead, if the design calls for a logo placement, recreate it subtly and small in the bottom-right corner. The logo reference is for understanding the brand's visual identity, not for literal placement.`,
+    `- LOGO: A brand logo image has been provided. Place the EXACT logo as-is into the banner — remove its background, keep every detail, color, and text EXACTLY as the original. Do NOT redraw, recreate, or alter the logo in any way. Do NOT change, omit, or add any text/letters on the logo. Place it cleanly in the bottom-right or top-left corner at a small but clearly visible size (roughly 8-12% of image width). The logo must look like a transparent PNG overlay on the banner.`,
     `- Use HIGH CONTRAST colors for maximum feed visibility`,
     `- ONE clear focal point — do not clutter the composition`,
     `- Clean, professional composition with intentional white space`,
