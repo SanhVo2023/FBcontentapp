@@ -29,7 +29,14 @@ export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig): strin
     `FACEBOOK OPTIMIZATION RULES:`,
     `- Text overlay must occupy LESS THAN 20% of total image area`,
     `- Keep ALL key content in the CENTER 80% of the image (safe zone for mobile crop)`,
-    `- LOGO: A brand logo image has been provided. Place the EXACT logo as-is into the banner — remove its background, keep every detail, color, and text EXACTLY as the original. Do NOT redraw, recreate, or alter the logo in any way. Do NOT change, omit, or add any text/letters on the logo. Place it cleanly in the bottom-right or top-left corner at a small but clearly visible size (roughly 8-12% of image width). The logo must look like a transparent PNG overlay on the banner.`,
+    `- LOGO HANDLING (CRITICAL): A brand logo has been provided as a reference image. You MUST:
+  1. REMOVE the logo's background completely — make it transparent/seamless with the banner
+  2. Place the EXACT original logo pixels as-is — do NOT redraw, regenerate, or alter ANY part of it
+  3. Keep every letter, word, shape, color, and detail PIXEL-PERFECT identical to the original
+  4. Do NOT add, remove, change, or re-spell any text that appears on the logo
+  5. Position it in the bottom-right or top-left corner, small but readable (8-12% of image width)
+  6. The logo must blend into the banner as if it were a transparent PNG overlay with NO visible background rectangle or box behind it
+  7. If the logo has a white or solid background, CUT IT OUT so only the logo graphic remains`,
     `- Use HIGH CONTRAST colors for maximum feed visibility`,
     `- ONE clear focal point — do not clutter the composition`,
     `- Clean, professional composition with intentional white space`,

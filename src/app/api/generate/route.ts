@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (includeLogo && brand.logo && brand.logo.startsWith("http")) {
       try {
         const asset = await fetchR2AsBase64(brand.logo);
-        images.push({ ...asset, label: `Brand logo for ${brand.brand_name}. Place this EXACT logo as-is into the banner. Remove its background, keep every detail/color/text identical. Do NOT redraw or alter it. Place it small in a corner as a transparent overlay.` });
+        images.push({ ...asset, label: `Brand logo for ${brand.brand_name}. CRITICAL: Remove the background completely. Place the EXACT original logo pixels unchanged — do NOT redraw or alter any text/shapes/colors. Overlay it transparently in a corner, small but readable.` });
       } catch { /* logo optional */ }
     }
 
