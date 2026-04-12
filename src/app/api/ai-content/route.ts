@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   generateCaptions, suggestVariations, generateWeekContent,
   suggestLegalContext, createPostFromContext, createImagePromptFromContent,
-  generateFullPost,
+  generateFullPost, generateCampaignContent,
 } from "@/lib/gemini-text";
 import type { BrandConfig } from "@/lib/fb-specs";
 
@@ -44,6 +44,16 @@ export async function POST(req: NextRequest) {
         const result = await generateFullPost(
           body.topic as string, body.post_type as string || "post",
           body.angle as string || "educational", body.language as string || "both", brand
+        );
+        return NextResponse.json(result);
+      }
+      case "generate_campaign": {
+        const result = await generateCampaignContent(
+          body.content_idea as string,
+          body.context_type as string || "content",
+          body.context_detail as string || "",
+          brand,
+          (body.language as "vi" | "en" | "both") || "both"
         );
         return NextResponse.json(result);
       }

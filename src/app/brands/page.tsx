@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { BrandConfig } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
+import { generateBrandConfigPrompt } from "@/lib/prompt-templates";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -25,6 +26,13 @@ export default function BrandsPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const handleCopyBrandPrompt = () => {
+    navigator.clipboard.writeText(generateBrandConfigPrompt());
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2000);
+  };
 
   useEffect(() => { api("/api/brands").then((b: BrandConfig[]) => setBrands(b)); }, []);
 
@@ -58,6 +66,9 @@ export default function BrandsPage() {
       <div className="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 shrink-0">
         <h1 className="text-base font-bold">Brands</h1>
         <div className="ml-auto flex gap-2">
+          <button onClick={handleCopyBrandPrompt} className="px-3 py-1.5 bg-purple-600/20 text-purple-400 text-xs rounded-lg hover:bg-purple-600/30 border border-purple-500/30">
+            {promptCopied ? "Copied!" : "Copy AI Prompt"}
+          </button>
           <button onClick={() => setShowImport(true)} className="px-3 py-1.5 bg-green-600/20 text-green-400 text-xs rounded-lg hover:bg-green-600/30">Import JSON</button>
           <button onClick={handleNew} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded-lg">+ New Brand</button>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
+import type { BrandConfig, PostConfig, CampaignConfig } from "@/lib/fb-specs";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
 
@@ -15,6 +15,7 @@ async function api(url: string, body?: unknown) {
 }
 
 export type ContentView = "kanban" | "calendar" | "table";
+export type DisplayMode = "campaigns" | "posts";
 
 export function useContentHub() {
   const searchParams = useSearchParams();
@@ -31,6 +32,7 @@ export function useContentHub() {
   const sortBy = searchParams.get("sort") || "created_at";
   const sortOrder = (searchParams.get("order") || "desc") as "asc" | "desc";
   const view = (searchParams.get("view") || "kanban") as ContentView;
+  const displayMode = (searchParams.get("mode") || "campaigns") as DisplayMode;
 
   // Helper to update URL params
   const updateParams = useCallback(
@@ -59,10 +61,12 @@ export function useContentHub() {
   const setSortBy = useCallback((v: string) => updateParams({ sort: v === "created_at" ? null : v }), [updateParams]);
   const setSortOrder = useCallback((v: "asc" | "desc") => updateParams({ order: v === "desc" ? null : v }), [updateParams]);
   const setView = useCallback((v: ContentView) => updateParams({ view: v === "kanban" ? null : v }), [updateParams]);
+  const setDisplayMode = useCallback((v: DisplayMode) => updateParams({ mode: v === "campaigns" ? null : v }), [updateParams]);
 
   // ── Ephemeral state (local only) ──
   const [brands, setBrands] = useState<BrandConfig[]>([]);
   const [posts, setPosts] = useState<PostConfig[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignConfig[]>([]);
   const [tags, setTags] = useState<TagRow[]>([]);
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -117,9 +121,28 @@ export function useContentHub() {
     }
   }, [activeBrand, filterStatus, filterContentType, filterServiceArea, filterTags, searchQuery, sortBy, sortOrder]);
 
+  // Load campaigns
+  const loadCampaigns = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (activeBrand !== "all") params.set("brand", activeBrand);
+      if (filterStatus.length) params.set("status", filterStatus.join(","));
+      if (searchQuery) params.set("search", searchQuery);
+      params.set("sort", sortBy === "scheduled_date" ? "target_date" : sortBy === "title" ? "name" : sortBy);
+      params.set("order", sortOrder);
+      const data = await api(`/api/campaigns?${params}`);
+      setCampaigns(data.campaigns || []);
+    } catch {
+      setCampaigns([]);
+    }
+  }, [activeBrand, filterStatus, searchQuery, sortBy, sortOrder]);
+
   useEffect(() => {
-    if (!loading) loadPosts();
-  }, [loadPosts, loading]);
+    if (!loading) {
+      if (displayMode === "campaigns") loadCampaigns();
+      else loadPosts();
+    }
+  }, [loadPosts, loadCampaigns, loading, displayMode]);
 
   // Load tags
   useEffect(() => {
@@ -150,6 +173,26 @@ export function useContentHub() {
 
   const unscheduledPosts = useMemo(() => displayPosts.filter((p) => !p.scheduled_date), [displayPosts]);
 
+  // Campaign derived data
+  const displayCampaigns = useMemo(() => campaigns.filter((c) => c.status !== "trashed"), [campaigns]);
+
+  const campaignsByStatus = useMemo(() => {
+    const map: Record<string, CampaignConfig[]> = {};
+    for (const c of displayCampaigns) {
+      (map[c.status] ||= []).push(c);
+    }
+    return map;
+  }, [displayCampaigns]);
+
+  const campaignsByDate = useMemo(() => {
+    return displayCampaigns.reduce((acc, c) => {
+      if (c.target_date) (acc[c.target_date] ||= []).push(c);
+      return acc;
+    }, {} as Record<string, CampaignConfig[]>);
+  }, [displayCampaigns]);
+
+  const unscheduledCampaigns = useMemo(() => displayCampaigns.filter((c) => !c.target_date), [displayCampaigns]);
+
   const activeFilterCount = [filterStatus.length > 0, !!filterContentType, !!filterServiceArea, filterTags.length > 0].filter(Boolean).length;
 
   // Actions
@@ -168,6 +211,21 @@ export function useContentHub() {
       await loadPosts();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Action failed");
+    }
+  };
+
+  const handleCampaignAction = async (action: string, campaignId: string, extra?: Record<string, unknown>) => {
+    setActionMsg(null);
+    try {
+      if (action === "trash") {
+        await api("/api/campaigns", { action: "trash", campaign_id: campaignId });
+        setActionMsg("Campaign moved to trash");
+      } else if (action === "update") {
+        await api("/api/campaigns", { action: "update", campaign_id: campaignId, updates: extra });
+      }
+      await loadCampaigns();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Campaign action failed");
     }
   };
 
@@ -202,9 +260,10 @@ export function useContentHub() {
     // Data
     brands, activeBrand, setActiveBrand,
     posts, displayPosts, postsByStatus, postsByDate, unscheduledPosts,
+    campaigns, displayCampaigns, campaignsByStatus, campaignsByDate, unscheduledCampaigns,
     tags, thumbnails, loading, postsLoading,
     // View
-    view, setView, calYear, setCalYear, calMonth, setCalMonth,
+    view, setView, displayMode, setDisplayMode, calYear, setCalYear, calMonth, setCalMonth,
     // Filters
     filterStatus, setFilterStatus, filterContentType, setFilterContentType,
     filterServiceArea, setFilterServiceArea, filterTags, setFilterTags,
@@ -217,6 +276,6 @@ export function useContentHub() {
     // Messages
     error, setError, actionMsg, setActionMsg,
     // Actions
-    handleAction, handleBulkAction, loadPosts,
+    handleAction, handleCampaignAction, handleBulkAction, loadPosts, loadCampaigns,
   };
 }

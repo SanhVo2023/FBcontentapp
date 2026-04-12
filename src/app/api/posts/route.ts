@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     if (params.get("sort")) filters.sortBy = params.get("sort") as PostFilters["sortBy"];
     if (params.get("order")) filters.sortOrder = params.get("order") as PostFilters["sortOrder"];
     if (params.get("tag_ids")) filters.tagIds = params.get("tag_ids")!.split(",");
+    if (params.get("campaign_id")) filters.campaignId = params.get("campaign_id")!;
     if (params.get("limit")) filters.limit = parseInt(params.get("limit")!);
     if (params.get("offset")) filters.offset = parseInt(params.get("offset")!);
 

@@ -8,14 +8,14 @@ import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { post, brand, testMode } = (await req.json()) as { post: PostConfig; brand: BrandConfig; testMode: boolean };
+    const { post, brand, testMode, includeLogo = true } = (await req.json()) as { post: PostConfig; brand: BrandConfig; testMode: boolean; includeLogo?: boolean };
     const spec = getPostSpec(post.type);
     const prompt = buildFBBannerPrompt(post, brand);
 
     const images: Array<{ base64: string; mimeType: string; label: string }> = [];
 
-    // Fetch logo from R2 URL
-    if (brand.logo && brand.logo.startsWith("http")) {
+    // Fetch logo from R2 URL (when includeLogo is true)
+    if (includeLogo && brand.logo && brand.logo.startsWith("http")) {
       try {
         const asset = await fetchR2AsBase64(brand.logo);
         images.push({ ...asset, label: `Brand logo for ${brand.brand_name}. For REFERENCE of brand identity only. Do NOT paste directly.` });

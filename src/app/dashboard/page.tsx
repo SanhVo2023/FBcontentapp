@@ -46,8 +46,8 @@ export default function DashboardPage() {
             </Link>
             <Link href="/content/create" className="bg-gradient-to-br from-purple-600/20 to-purple-600/5 border border-purple-500/30 rounded-xl p-4 hover:border-purple-500/60 transition group">
               <div className="text-xl mb-1.5">✨</div>
-              <div className="font-semibold text-sm text-white group-hover:text-purple-400 transition">Create Post</div>
-              <div className="text-[11px] text-gray-500 mt-1">Scratch, template, or JSON import</div>
+              <div className="font-semibold text-sm text-white group-hover:text-purple-400 transition">Create Content</div>
+              <div className="text-[11px] text-gray-500 mt-1">Campaign, single post, or JSON import</div>
             </Link>
             <Link href="/content" className="bg-gradient-to-br from-teal-600/20 to-teal-600/5 border border-teal-500/30 rounded-xl p-4 hover:border-teal-500/60 transition group">
               <div className="text-xl mb-1.5">📅</div>
@@ -71,10 +71,10 @@ export default function DashboardPage() {
               <div className="font-semibold text-sm text-white group-hover:text-orange-400 transition">Batch Generate</div>
               <div className="text-[11px] text-gray-500 mt-1">Multiple banners at once</div>
             </Link>
-            <Link href="/templates" className="bg-gradient-to-br from-green-600/20 to-green-600/5 border border-green-500/30 rounded-xl p-4 hover:border-green-500/60 transition group">
-              <div className="text-xl mb-1.5">🤖</div>
-              <div className="font-semibold text-sm text-white group-hover:text-green-400 transition">AI Templates</div>
-              <div className="text-[11px] text-gray-500 mt-1">Prompt templates for agents</div>
+            <Link href="/content/create" className="bg-gradient-to-br from-green-600/20 to-green-600/5 border border-green-500/30 rounded-xl p-4 hover:border-green-500/60 transition group">
+              <div className="text-xl mb-1.5">🚀</div>
+              <div className="font-semibold text-sm text-white group-hover:text-green-400 transition">New Campaign</div>
+              <div className="text-[11px] text-gray-500 mt-1">AI-generated content campaigns</div>
             </Link>
           </div>
         </div>

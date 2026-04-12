@@ -1,5 +1,25 @@
 import type { BrandConfig } from "./fb-specs";
 
+export const VIETNAMESE_FB_WRITING_STYLE = `## VIETNAMESE FACEBOOK WRITING STYLE GUIDE
+Follow these rules strictly when writing Vietnamese Facebook captions:
+
+1. **Emoji as structure**: Use emoji as bullet points and emphasis throughout the text (e.g., ✅ 📌 👉 💡 ⚖️ 🏠). Every section should start with a relevant emoji.
+2. **Line breaks between every thought**: Each point/sentence gets its own line. NEVER write long paragraphs. Use blank lines between sections.
+3. **Attention-grabbing hook**: Start with a compelling question, exclamation, or bold statement with emoji (e.g., "🔥 Bạn đang bị tranh chấp đất đai?" or "⚠️ 5 ĐIỀU BẠN CẦN BIẾT khi ly hôn đơn phương!")
+4. **Numbered lists with emoji**: Use 1️⃣ 2️⃣ 3️⃣ or ✅ for listing points
+5. **Personal & conversational tone**: Even for professional/legal content, write as if talking to a friend. Use "bạn" (you), ask rhetorical questions.
+6. **Contact info block at end**: Always end with a formatted contact block:
+   ---
+   📞 Hotline: (028) 66.701.709
+   💬 Zalo: zalo.me/apololawyers
+   📍 108 Trần Đình Xu, Q.1, TP.HCM
+7. **Hashtags at end**: Mix Vietnamese and English hashtags (e.g., #LuậtSư #ApololLawyers #TưVấnPhápLý #LawyerHCMC)
+8. **Short punchy sentences**: Max 1-2 lines per sentence. Break complex ideas into simple, digestible points.
+9. **Vietnamese CTA style**: Use strong CTAs like "Liên hệ NGAY", "Inbox NGAY để được tư vấn MIỄN PHÍ", "Gọi ngay cho luật sư"
+10. **Emotional connection**: Include empathetic phrases like "Apolo Lawyers hiểu rằng...", "Đừng lo lắng...", "Chúng tôi luôn đồng hành..."
+`;
+
+
 export function generatePostBatchPrompt(brand: BrandConfig, count = 12): string {
   return `You are a Facebook ad creative strategist. Generate ${count} Facebook post/ad banner configurations for the brand below.
 

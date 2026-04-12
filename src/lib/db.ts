@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { BrandConfig, PostConfig } from "./fb-specs";
+import type { BrandConfig, PostConfig, CampaignConfig, CampaignStatus, ContextType } from "./fb-specs";
 
 // ============================================
 // TYPE MAPPINGS (Supabase row ↔ App types)
@@ -27,6 +27,7 @@ type BrandRow = {
 export type PostRow = {
   id: string;
   brand_id: string;
+  campaign_id: string | null;
   title: string;
   service_area: string | null;
   content_type: string | null;
@@ -57,7 +58,23 @@ export type PostImageRow = {
   r2_url: string;
   drive_url: string | null;
   status: string;
+  version: number;
+  approved: boolean;
   created_at: string;
+};
+
+export type CampaignRow = {
+  id: string;
+  brand_id: string;
+  name: string;
+  description: string;
+  content_idea: string;
+  context_type: string;
+  context_detail: string;
+  status: string;
+  target_date: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type TagRow = {
@@ -102,6 +119,7 @@ function toPostConfig(row: PostRow): PostConfig {
     id: row.id,
     title: row.title || "",
     brand_id: row.brand_id,
+    campaign_id: row.campaign_id || undefined,
     service_area: row.service_area || undefined,
     content_type: (row.content_type as PostConfig["content_type"]) || undefined,
     topic: row.topic || undefined,
@@ -118,6 +136,23 @@ function toPostConfig(row: PostRow): PostConfig {
     status: row.status || "draft",
     scheduled_date: row.scheduled_date || undefined,
     trashed_at: row.trashed_at || undefined,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// Convert Supabase campaign row → app CampaignConfig
+function toCampaignConfig(row: CampaignRow): CampaignConfig {
+  return {
+    id: row.id,
+    brand_id: row.brand_id,
+    name: row.name || "",
+    description: row.description || "",
+    content_idea: row.content_idea || "",
+    context_type: (row.context_type as ContextType) || "content",
+    context_detail: row.context_detail || "",
+    status: (row.status as CampaignStatus) || "draft",
+    target_date: row.target_date || undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -181,6 +216,7 @@ export async function deleteBrand(brandId: string): Promise<void> {
 
 export type PostFilters = {
   brandId?: string;
+  campaignId?: string;
   status?: string | string[];
   contentType?: string;
   serviceArea?: string;
@@ -198,6 +234,7 @@ export async function getPosts(filters: PostFilters = {}): Promise<{ posts: Post
   let query = supabase.from("posts").select("*", { count: "exact" });
 
   if (filters.brandId) query = query.eq("brand_id", filters.brandId);
+  if (filters.campaignId) query = query.eq("campaign_id", filters.campaignId);
 
   if (filters.status) {
     if (Array.isArray(filters.status)) {
@@ -259,6 +296,7 @@ export async function createPost(
     .from("posts")
     .insert({
       brand_id: post.brand_id,
+      campaign_id: post.campaign_id || null,
       title: post.title || "",
       service_area: post.service_area || null,
       content_type: post.content_type || null,
@@ -304,6 +342,7 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.scheduled_date !== undefined) dbUpdates.scheduled_date = updates.scheduled_date || null;
   if (updates.trashed_at !== undefined) dbUpdates.trashed_at = updates.trashed_at;
   if (updates.brand_id !== undefined) dbUpdates.brand_id = updates.brand_id;
+  if (updates.campaign_id !== undefined) dbUpdates.campaign_id = updates.campaign_id || null;
 
   const { data, error } = await supabase
     .from("posts")
@@ -353,6 +392,7 @@ export async function bulkCreatePosts(
 ): Promise<PostConfig[]> {
   const rows = posts.map((p) => ({
     brand_id: p.brand_id,
+    campaign_id: p.campaign_id || null,
     title: p.title || "",
     service_area: p.service_area || null,
     content_type: p.content_type || null,
@@ -431,6 +471,8 @@ export async function savePostImage(image: {
   r2_url?: string;
   drive_url?: string;
   status?: string;
+  version?: number;
+  approved?: boolean;
 }): Promise<PostImageRow> {
   const { data, error } = await supabase
     .from("post_images")
@@ -441,6 +483,8 @@ export async function savePostImage(image: {
       r2_url: image.r2_url || "",
       drive_url: image.drive_url || null,
       status: image.status || "pending",
+      version: image.version || 1,
+      approved: image.approved || false,
     })
     .select()
     .single();
@@ -556,4 +600,229 @@ export async function createTemplate(template: {
 export async function deleteTemplate(templateId: string): Promise<void> {
   const { error } = await supabase.from("goal_templates").delete().eq("id", templateId);
   if (error) throw new Error(error.message);
+}
+
+// ============================================
+// CAMPAIGNS
+// ============================================
+
+export type CampaignFilters = {
+  brandId?: string;
+  status?: string | string[];
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: "created_at" | "updated_at" | "target_date" | "name";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+};
+
+export async function getCampaigns(filters: CampaignFilters = {}): Promise<{ campaigns: CampaignConfig[]; count: number }> {
+  let query = supabase.from("campaigns").select("*", { count: "exact" });
+
+  if (filters.brandId) query = query.eq("brand_id", filters.brandId);
+
+  if (filters.status) {
+    if (Array.isArray(filters.status)) {
+      query = query.in("status", filters.status);
+    } else {
+      query = query.eq("status", filters.status);
+    }
+  }
+
+  if (filters.search) {
+    query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,content_idea.ilike.%${filters.search}%`);
+  }
+
+  if (filters.dateFrom) query = query.gte("target_date", filters.dateFrom);
+  if (filters.dateTo) query = query.lte("target_date", filters.dateTo);
+
+  const sortBy = filters.sortBy || "created_at";
+  const sortOrder = filters.sortOrder || "desc";
+  query = query.order(sortBy, { ascending: sortOrder === "asc", nullsFirst: false });
+
+  if (filters.limit) query = query.limit(filters.limit);
+  if (filters.offset) query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+
+  return { campaigns: (data as CampaignRow[]).map(toCampaignConfig), count: count || 0 };
+}
+
+export async function getCampaign(campaignId: string): Promise<CampaignConfig | null> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("*")
+    .eq("id", campaignId)
+    .single();
+  if (error) return null;
+  return toCampaignConfig(data as CampaignRow);
+}
+
+export async function createCampaign(campaign: Partial<CampaignConfig> & { brand_id: string }): Promise<CampaignConfig> {
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      brand_id: campaign.brand_id,
+      name: campaign.name || "",
+      description: campaign.description || "",
+      content_idea: campaign.content_idea || "",
+      context_type: campaign.context_type || "content",
+      context_detail: campaign.context_detail || "",
+      status: campaign.status || "draft",
+      target_date: campaign.target_date || null,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return toCampaignConfig(data as CampaignRow);
+}
+
+export async function updateCampaign(campaignId: string, updates: Partial<CampaignConfig>): Promise<CampaignConfig> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.content_idea !== undefined) dbUpdates.content_idea = updates.content_idea;
+  if (updates.context_type !== undefined) dbUpdates.context_type = updates.context_type;
+  if (updates.context_detail !== undefined) dbUpdates.context_detail = updates.context_detail;
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.target_date !== undefined) dbUpdates.target_date = updates.target_date || null;
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update(dbUpdates)
+    .eq("id", campaignId)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return toCampaignConfig(data as CampaignRow);
+}
+
+export async function deleteCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase.from("campaigns").delete().eq("id", campaignId);
+  if (error) throw new Error(error.message);
+}
+
+export async function trashCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase
+    .from("campaigns")
+    .update({ status: "trashed" })
+    .eq("id", campaignId);
+  if (error) throw new Error(error.message);
+}
+
+export async function getCampaignPosts(campaignId: string): Promise<PostConfig[]> {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("campaign_id", campaignId)
+    .neq("status", "trashed")
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return (data as PostRow[]).map(toPostConfig);
+}
+
+export async function getCampaignSummaries(
+  campaignIds: string[]
+): Promise<Record<string, { post_count: number; image_count: number; thumbnails: string[] }>> {
+  if (!campaignIds.length) return {};
+
+  // Get post counts per campaign
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id, campaign_id, status")
+    .in("campaign_id", campaignIds)
+    .neq("status", "trashed");
+
+  const postsByCampaign: Record<string, string[]> = {};
+  for (const p of posts || []) {
+    if (!postsByCampaign[p.campaign_id]) postsByCampaign[p.campaign_id] = [];
+    postsByCampaign[p.campaign_id].push(p.id);
+  }
+
+  // Get thumbnails
+  const allPostIds = (posts || []).map((p) => p.id);
+  const thumbnails = allPostIds.length ? await getPostThumbnails(allPostIds) : {};
+
+  // Get image counts
+  let imageCounts: Record<string, number> = {};
+  if (allPostIds.length) {
+    const { data: images } = await supabase
+      .from("post_images")
+      .select("post_id")
+      .in("post_id", allPostIds)
+      .eq("status", "done");
+    for (const img of images || []) {
+      imageCounts[img.post_id] = (imageCounts[img.post_id] || 0) + 1;
+    }
+  }
+
+  const result: Record<string, { post_count: number; image_count: number; thumbnails: string[] }> = {};
+  for (const cid of campaignIds) {
+    const cPostIds = postsByCampaign[cid] || [];
+    result[cid] = {
+      post_count: cPostIds.length,
+      image_count: cPostIds.reduce((sum, pid) => sum + (imageCounts[pid] || 0), 0),
+      thumbnails: cPostIds.slice(0, 4).map((pid) => thumbnails[pid]).filter(Boolean),
+    };
+  }
+  return result;
+}
+
+// ============================================
+// IMAGE VERSIONING
+// ============================================
+
+export async function getPostImageVersions(postId: string): Promise<PostImageRow[]> {
+  const { data, error } = await supabase
+    .from("post_images")
+    .select("*")
+    .eq("post_id", postId)
+    .order("variant_type")
+    .order("version", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as PostImageRow[];
+}
+
+export async function getNextImageVersion(postId: string, variantType: string): Promise<number> {
+  const { data } = await supabase
+    .from("post_images")
+    .select("version")
+    .eq("post_id", postId)
+    .eq("variant_type", variantType)
+    .order("version", { ascending: false })
+    .limit(1);
+  return (data?.[0]?.version || 0) + 1;
+}
+
+export async function approveImage(imageId: string): Promise<void> {
+  // Get the image to find its post_id and variant_type
+  const { data: img } = await supabase
+    .from("post_images")
+    .select("post_id, variant_type")
+    .eq("id", imageId)
+    .single();
+  if (!img) throw new Error("Image not found");
+
+  // Approve this image
+  await supabase.from("post_images").update({ approved: true }).eq("id", imageId);
+
+  // Un-approve other versions of the same variant
+  await supabase
+    .from("post_images")
+    .update({ approved: false })
+    .eq("post_id", img.post_id)
+    .eq("variant_type", img.variant_type)
+    .neq("id", imageId);
+}
+
+export async function trashNonApprovedImages(postId: string): Promise<void> {
+  await supabase
+    .from("post_images")
+    .update({ status: "trashed" })
+    .eq("post_id", postId)
+    .eq("approved", false)
+    .neq("status", "trashed");
 }

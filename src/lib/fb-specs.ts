@@ -55,6 +55,7 @@ export type PostConfig = {
   id: string;
   title: string;
   brand_id?: string;
+  campaign_id?: string;
 
   // Content
   service_area?: string;
@@ -116,6 +117,57 @@ export const POST_STATUSES = [
   { value: "published", label: "Published", color: "bg-green-500" },
   { value: "trashed", label: "Trashed", color: "bg-red-500" },
 ];
+
+// ── Campaign Types ──
+
+export type ContextType = "promotion" | "product" | "content" | "reference";
+
+export const CONTEXT_TYPES: { value: ContextType; label: string; emoji: string }[] = [
+  { value: "promotion", label: "Khuyến mãi / Promotion", emoji: "🏷️" },
+  { value: "product", label: "Sản phẩm / Product", emoji: "📦" },
+  { value: "content", label: "Nội dung / Content", emoji: "📝" },
+  { value: "reference", label: "Tham khảo / Reference", emoji: "🔗" },
+];
+
+export type CampaignStatus = "draft" | "in_progress" | "review" | "approved" | "scheduled" | "published" | "trashed";
+
+export const CAMPAIGN_STATUSES: { value: CampaignStatus; label: string; color: string }[] = [
+  { value: "draft", label: "Draft", color: "bg-gray-500" },
+  { value: "in_progress", label: "In Progress", color: "bg-yellow-500" },
+  { value: "review", label: "Review", color: "bg-orange-500" },
+  { value: "approved", label: "Approved", color: "bg-blue-500" },
+  { value: "scheduled", label: "Scheduled", color: "bg-teal-500" },
+  { value: "published", label: "Published", color: "bg-green-500" },
+  { value: "trashed", label: "Trashed", color: "bg-red-500" },
+];
+
+export type CampaignConfig = {
+  id: string;
+  brand_id: string;
+  name: string;
+  description: string;
+  content_idea: string;
+  context_type: ContextType;
+  context_detail: string;
+  status: CampaignStatus;
+  target_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Computed summaries (populated by API)
+  post_count?: number;
+  image_count?: number;
+  thumbnails?: string[];
+};
+
+export function deriveCampaignStatus(postStatuses: string[]): CampaignStatus {
+  if (!postStatuses.length) return "draft";
+  if (postStatuses.every((s) => s === "published")) return "published";
+  if (postStatuses.every((s) => s === "scheduled" || s === "published")) return "scheduled";
+  if (postStatuses.every((s) => s === "approved" || s === "scheduled" || s === "published")) return "approved";
+  if (postStatuses.some((s) => s === "review")) return "review";
+  if (postStatuses.some((s) => s === "images_pending" || s === "images_done")) return "in_progress";
+  return "draft";
+}
 
 export type PostManifest = {
   brand_id: string;

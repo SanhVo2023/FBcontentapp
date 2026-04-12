@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadGeneratedImage } from "@/lib/r2-client";
 import { getPostSpec } from "@/lib/fb-specs";
-import { savePostImage, updatePost } from "@/lib/db";
+import { savePostImage, updatePost, getNextImageVersion } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,15 +15,18 @@ export async function POST(req: NextRequest) {
       r2_url = await uploadGeneratedImage(buffer, brand, postId);
     } catch { /* R2 optional */ }
 
-    // Save image record to Supabase
+    // Save image record to Supabase with versioning
     if (postId && r2_url) {
       try {
+        const version = await getNextImageVersion(postId, type || "feed-square");
         await savePostImage({
           post_id: postId,
           variant_type: type || "feed-square",
           prompt: prompt?.slice(0, 500) || "",
           r2_url,
           status: "done",
+          version,
+          approved: false,
         });
         // Update post status to images_done
         await updatePost(postId, { status: "images_done" });

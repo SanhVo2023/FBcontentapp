@@ -24,6 +24,7 @@ export default function GeneratePage() {
   const [cta, setCta] = useState("");
   const [useModel, setUseModel] = useState<string | null>(null);
   const [useRef, setUseRef] = useState<string | null>(null);
+  const [includeLogo, setIncludeLogo] = useState(true);
   const [aiAssisting, setAiAssisting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -43,7 +44,7 @@ export default function GeneratePage() {
     setLoading(true); setError(null); setUploadResult(null);
     try {
       const post: PostConfig = { id: `gen-${Date.now()}`, title: headline || prompt.slice(0, 50), type: postType as PostConfig["type"], prompt, text_overlay: { headline: headline || undefined, subline: subline || undefined, cta: cta || undefined }, use_model: useModel, use_reference: useRef, style, status: "pending" };
-      const data = await api("/api/generate", { post, brand, testMode: false });
+      const data = await api("/api/generate", { post, brand, testMode: false, includeLogo });
       setResult({ imageBase64: data.imageBase64, width: data.width, height: data.height, size: data.size });
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
@@ -84,6 +85,10 @@ export default function GeneratePage() {
                 <div className="flex gap-1">{[brand.color_primary, brand.color_secondary].map((c, i) => <div key={i} className="w-4 h-4 rounded" style={{ background: c }} />)}</div>
                 <span className="text-[10px] text-gray-500 ml-auto">{brand.tone?.slice(0, 40)}</span>
               </div>
+              <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={includeLogo} onChange={(e) => setIncludeLogo(e.target.checked)} className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/30" />
+                Include Logo as reference
+              </label>
               {brand.models?.length > 0 && (
                 <div className="flex gap-2">{brand.models.map((m) => (
                   <button key={m.id} onClick={() => setUseModel(useModel === m.id ? null : m.id)} className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] ${useModel === m.id ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-gray-800 text-gray-400"}`}>

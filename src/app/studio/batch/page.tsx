@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
+import { generatePostBatchPrompt } from "@/lib/prompt-templates";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -25,6 +26,8 @@ export default function BatchPage() {
   const [log, setLog] = useState<Array<{ msg: string; type: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [postMeta, setPostMeta] = useState<Record<string, { hasLogo: boolean; hasModel: boolean; hasRef: boolean }>>({});
 
   useEffect(() => { api("/api/brands").then((b: BrandConfig[]) => { setBrands(b); if (b.length) { setBrand(b[0]); loadPosts(b[0].brand_id); } }); }, []);
 
@@ -86,6 +89,11 @@ export default function BatchPage() {
           {brands.map((b) => <option key={b.brand_id} value={b.brand_id}>{b.brand_name}</option>)}
         </select>
         <div className="ml-auto flex gap-2">
+          {brand && (
+            <button onClick={() => { navigator.clipboard.writeText(generatePostBatchPrompt(brand, posts.length || 12)); setPromptCopied(true); setTimeout(() => setPromptCopied(false), 2000); }} className="px-3 py-1.5 bg-purple-600/20 text-purple-400 text-xs rounded hover:bg-purple-600/30 border border-purple-500/30">
+              {promptCopied ? "Copied!" : "Copy AI Prompt"}
+            </button>
+          )}
           <button onClick={() => setShowImport(true)} className="px-3 py-1.5 bg-green-600/20 text-green-400 text-xs rounded hover:bg-green-600/30">Import JSON</button>
           <button onClick={handleSave} className="px-3 py-1.5 bg-gray-800 text-gray-300 text-xs rounded hover:bg-gray-700">Save to Sheet</button>
         </div>
@@ -125,7 +133,22 @@ export default function BatchPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5"><span className="text-xs font-medium truncate">{post.title}</span><span className="text-[9px] px-1 py-0.5 rounded bg-gray-800 text-gray-500">{spec.label}</span></div>
                       <div className="text-[10px] text-gray-500 truncate mt-0.5">{post.prompt?.slice(0, 70)}</div>
-                      <div className="flex gap-2 text-[10px] mt-0.5">{post.use_model && <span className="text-blue-400/70">Model: {post.use_model}</span>}{post.text_overlay?.headline && <span className="text-yellow-400/60">"{post.text_overlay.headline}"</span>}</div>
+                      <div className="flex gap-2 text-[10px] mt-0.5">
+                        {post.use_model && <span className="text-blue-400/70">Model: {post.use_model}</span>}
+                        {post.text_overlay?.headline && <span className="text-yellow-400/60">"{post.text_overlay.headline}"</span>}
+                      </div>
+                      <div className="flex gap-3 mt-1">
+                        {[
+                          { key: "hasLogo" as const, label: "Logo", color: "text-amber-400" },
+                          { key: "hasModel" as const, label: "Model", color: "text-blue-400" },
+                          { key: "hasRef" as const, label: "Ref", color: "text-purple-400" },
+                        ].map((meta) => (
+                          <label key={meta.key} className={`flex items-center gap-1 text-[9px] cursor-pointer ${postMeta[post.id]?.[meta.key] ? meta.color : "text-gray-600"}`}>
+                            <input type="checkbox" checked={postMeta[post.id]?.[meta.key] || false} onChange={(e) => setPostMeta((prev) => ({ ...prev, [post.id]: { ...prev[post.id], hasLogo: prev[post.id]?.hasLogo || false, hasModel: prev[post.id]?.hasModel || false, hasRef: prev[post.id]?.hasRef || false, [meta.key]: e.target.checked } }))} className="w-2.5 h-2.5 accent-current" />
+                            {meta.label}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
                       <button onClick={() => handleGenerate(post.id)} disabled={isProc} className="px-3 py-1.5 rounded text-[11px] font-medium bg-blue-600 hover:bg-blue-500 text-white disabled:bg-gray-700">{hasImg ? "Regen" : "Generate"}</button>

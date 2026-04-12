@@ -1,8 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { BrandConfig } from "./fb-specs";
+import { VIETNAMESE_FB_WRITING_STYLE } from "./prompt-templates";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+function viStyleBlock(language: string): string {
+  if (language === "en") return "";
+  return `\n\n${VIETNAMESE_FB_WRITING_STYLE}\n`;
+}
 
 function brandContext(brand: BrandConfig): string {
   return `Brand: ${brand.brand_name} (${brand.tagline})
@@ -22,7 +28,7 @@ export async function generateCaptions(
   const result = await model.generateContent(`You are a Facebook ad copywriter for a law firm.
 
 ${brandContext(brand)}
-
+${viStyleBlock(language)}
 Visual concept: ${prompt}
 
 ${langInstruction}
@@ -75,6 +81,7 @@ export async function generateWeekContent(
   const result = await model.generateContent(`You are a social media content strategist for a law firm in Vietnam.
 
 ${brandContext(brand)}
+${viStyleBlock("vi")}
 ${brand.models?.length ? `Available model: "${brand.models[0].id}" (${brand.models[0].name})` : ""}
 
 Generate 4 Facebook posts for the week starting ${weekStart}. Schedule them on Mon, Wed, Fri, Sat.
@@ -142,6 +149,7 @@ export async function createPostFromContext(
   const result = await model.generateContent(`You are a Facebook content writer for a Vietnamese law firm.
 
 ${brandContext(brand)}
+${viStyleBlock(language)}
 Service area: ${serviceArea}
 Content type: ${contentType}
 Topic: ${topic}
@@ -213,7 +221,7 @@ export async function generateFullPost(
   const result = await model.generateContent(`You are a Facebook content creator for a Vietnamese law firm.
 
 ${brandContext(brand)}
-
+${viStyleBlock(language)}
 Create a complete Facebook ${postType} about: "${topic}"
 Content angle: ${angle}
 ${langInst}
@@ -232,6 +240,86 @@ Return ONLY JSON:
 }
 
 Tone: ${brand.tone}. Return ONLY JSON.`);
+
+  const text = result.response.text().replace(/```json\n?/g, "").replace(/```/g, "").trim();
+  return JSON.parse(text);
+}
+
+export type CampaignVariant = {
+  title: string;
+  caption_vi?: string;
+  caption_en?: string;
+  headline: string;
+  subline: string;
+  cta: string;
+  image_prompt: string;
+  content_type: string;
+  style: string;
+  post_type: string;
+  service_area?: string;
+};
+
+export type GeneratedCampaign = {
+  name: string;
+  description: string;
+  variants: CampaignVariant[];
+};
+
+export async function generateCampaignContent(
+  contentIdea: string,
+  contextType: string,
+  contextDetail: string,
+  brand: BrandConfig,
+  language: "vi" | "en" | "both" = "both"
+): Promise<GeneratedCampaign> {
+  const langInst = language === "both"
+    ? "Generate BOTH Vietnamese and English captions for each variant."
+    : language === "vi" ? "Vietnamese captions only." : "English captions only.";
+
+  const result = await model.generateContent(`You are a senior Facebook content strategist for a Vietnamese law firm. Your job is to create a complete content CAMPAIGN from a single idea.
+
+${brandContext(brand)}
+${viStyleBlock(language)}
+${brand.models?.length ? `Available models: ${brand.models.map((m) => `"${m.id}" (${m.name})`).join(", ")}` : ""}
+
+## CONTENT IDEA
+${contentIdea}
+
+## CONTEXT
+Type: ${contextType}
+Details: ${contextDetail}
+
+## TASK
+Create a content campaign with 3-5 content VARIANTS. Each variant should be a different angle/format of the same idea:
+- Mix of content types: educational, authority, promotional, engagement
+- Mix of post formats: feed-square (1080x1080), feed-wide (1200x630), story (1080x1920), carousel (1080x1080)
+- Mix of visual styles: professional, bold, minimal, warm, dark-luxury, vibrant, editorial
+- Each variant targets a different aspect or audience segment
+
+${langInst}
+
+Return ONLY a JSON object:
+{
+  "name": "Campaign name (concise, descriptive)",
+  "description": "1-2 sentence campaign description",
+  "variants": [
+    {
+      "title": "Variant title",
+      ${language !== "en" ? '"caption_vi": "Full Vietnamese Facebook caption following the Vietnamese writing style guide",' : ""}
+      ${language !== "vi" ? '"caption_en": "Full English Facebook caption",' : ""}
+      "headline": "BANNER HEADLINE (max 6 words)",
+      "subline": "Supporting text (max 12 words)",
+      "cta": "CTA (max 3 words)",
+      "image_prompt": "Detailed visual description for AI image generation. Scene, composition, lighting, mood. 2-3 sentences.",
+      "content_type": "educational|authority|promotional|engagement",
+      "style": "professional|bold|minimal|warm|dark-luxury|vibrant|editorial",
+      "post_type": "feed-square|feed-wide|story|carousel",
+      "service_area": "family-law|civil-disputes|land-real-estate|corporate|criminal|labor|commercial|foreign-investment|general"
+    }
+  ]
+}
+
+Generate exactly 4 variants with different angles. Return ONLY JSON.`);
 
   const text = result.response.text().replace(/```json\n?/g, "").replace(/```/g, "").trim();
   return JSON.parse(text);
