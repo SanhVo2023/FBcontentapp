@@ -6,6 +6,8 @@ import { getPostSpec } from "@/lib/fb-specs";
 import { fetchR2AsBase64 } from "@/lib/r2-client";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   try {
     const { post, brand, testMode, includeLogo = true } = (await req.json()) as { post: PostConfig; brand: BrandConfig; testMode: boolean; includeLogo?: boolean };

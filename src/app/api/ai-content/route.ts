@@ -6,6 +6,8 @@ import {
 } from "@/lib/gemini-text";
 import type { BrandConfig } from "@/lib/fb-specs";
 
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

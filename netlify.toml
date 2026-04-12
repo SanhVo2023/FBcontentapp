@@ -10,3 +10,8 @@
 
 [functions]
   external_node_modules = ["sharp"]
+
+# Netlify Background Functions aren't needed — just extend the timeout
+# Requires Netlify Pro plan for >10s. On free plan, keep AI calls fast.
+# If on Pro: uncomment the next line
+# node_bundler = "esbuild"

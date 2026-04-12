@@ -4,6 +4,7 @@ import { VIETNAMESE_FB_WRITING_STYLE } from "./prompt-templates";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+const fastModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 function viStyleBlock(language: string): string {
   if (language === "en") return "";
@@ -78,7 +79,7 @@ export async function generateWeekContent(
   caption_vi: string; caption_en: string;
   content_type: string; scheduled_date: string; style: string;
 }>> {
-  const result = await model.generateContent(`You are a social media content strategist for a law firm in Vietnam.
+  const result = await fastModel.generateContent(`You are a social media content strategist for a law firm in Vietnam.
 
 ${brandContext(brand)}
 ${viStyleBlock("vi")}
@@ -218,7 +219,7 @@ export async function generateFullPost(
     return d.toISOString().slice(0, 10);
   })();
 
-  const result = await model.generateContent(`You are a Facebook content creator for a Vietnamese law firm.
+  const result = await fastModel.generateContent(`You are a Facebook content creator for a Vietnamese law firm.
 
 ${brandContext(brand)}
 ${viStyleBlock(language)}
@@ -276,7 +277,7 @@ export async function generateCampaignContent(
     ? "Generate BOTH Vietnamese and English captions for each variant."
     : language === "vi" ? "Vietnamese captions only." : "English captions only.";
 
-  const result = await model.generateContent(`You are a senior Facebook content strategist for a Vietnamese law firm. Your job is to create a complete content CAMPAIGN from a single idea.
+  const result = await fastModel.generateContent(`You are a senior Facebook content strategist for a Vietnamese law firm. Your job is to create a complete content CAMPAIGN from a single idea.
 
 ${brandContext(brand)}
 ${viStyleBlock(language)}
