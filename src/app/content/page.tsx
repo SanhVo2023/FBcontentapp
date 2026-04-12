@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useContentHub } from "@/hooks/useContentHub";
 import ContentHeader from "@/components/content/ContentHeader";
 import ContentFilters from "@/components/content/ContentFilters";
@@ -9,6 +10,14 @@ import CalendarView from "@/components/content/CalendarView";
 import TableView from "@/components/content/TableView";
 
 export default function ContentHubPage() {
+  return (
+    <Suspense fallback={<div className="flex-1 p-6 space-y-3">{[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-gray-900 rounded-xl animate-pulse" />)}</div>}>
+      <ContentHubInner />
+    </Suspense>
+  );
+}
+
+function ContentHubInner() {
   const hub = useContentHub();
 
   return (

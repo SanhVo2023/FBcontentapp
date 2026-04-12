@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
@@ -16,37 +17,61 @@ async function api(url: string, body?: unknown) {
 export type ContentView = "kanban" | "calendar" | "table";
 
 export function useContentHub() {
-  // Data
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // ── URL-persisted state (survives navigation) ──
+  const activeBrand = searchParams.get("brand") || "all";
+  const filterStatus = useMemo(() => searchParams.get("status")?.split(",").filter(Boolean) || [], [searchParams]);
+  const filterContentType = searchParams.get("content_type") || "";
+  const filterServiceArea = searchParams.get("service_area") || "";
+  const filterTags = useMemo(() => searchParams.get("tags")?.split(",").filter(Boolean) || [], [searchParams]);
+  const searchQuery = searchParams.get("q") || "";
+  const sortBy = searchParams.get("sort") || "created_at";
+  const sortOrder = (searchParams.get("order") || "desc") as "asc" | "desc";
+  const view = (searchParams.get("view") || "kanban") as ContentView;
+
+  // Helper to update URL params
+  const updateParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [searchParams, router, pathname]
+  );
+
+  // Setters that update URL
+  const setActiveBrand = useCallback((v: string) => updateParams({ brand: v === "all" ? null : v }), [updateParams]);
+  const setFilterStatus = useCallback((v: string[]) => updateParams({ status: v.length ? v.join(",") : null }), [updateParams]);
+  const setFilterContentType = useCallback((v: string) => updateParams({ content_type: v || null }), [updateParams]);
+  const setFilterServiceArea = useCallback((v: string) => updateParams({ service_area: v || null }), [updateParams]);
+  const setFilterTags = useCallback((v: string[]) => updateParams({ tags: v.length ? v.join(",") : null }), [updateParams]);
+  const setSearchQuery = useCallback((v: string) => updateParams({ q: v || null }), [updateParams]);
+  const setSortBy = useCallback((v: string) => updateParams({ sort: v === "created_at" ? null : v }), [updateParams]);
+  const setSortOrder = useCallback((v: "asc" | "desc") => updateParams({ order: v === "desc" ? null : v }), [updateParams]);
+  const setView = useCallback((v: ContentView) => updateParams({ view: v === "kanban" ? null : v }), [updateParams]);
+
+  // ── Ephemeral state (local only) ──
   const [brands, setBrands] = useState<BrandConfig[]>([]);
-  const [activeBrand, setActiveBrand] = useState<string>("all");
   const [posts, setPosts] = useState<PostConfig[]>([]);
   const [tags, setTags] = useState<TagRow[]>([]);
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
-
-  // View
-  const [view, setView] = useState<ContentView>("kanban");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-
-  // Filters
-  const [filterStatus, setFilterStatus] = useState<string[]>([]);
-  const [filterContentType, setFilterContentType] = useState("");
-  const [filterServiceArea, setFilterServiceArea] = useState("");
-  const [filterTags, setFilterTags] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<string>("created_at");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showFilters, setShowFilters] = useState(false);
-
-  // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  // Detail panel
   const [detailPost, setDetailPost] = useState<PostConfig | null>(null);
-
-  // Messages
   const [error, setError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
@@ -77,7 +102,6 @@ export function useContentHub() {
       const loadedPosts: PostConfig[] = data.posts || [];
       setPosts(loadedPosts);
 
-      // Load thumbnails
       const ids = loadedPosts.map((p) => p.id).filter(Boolean);
       if (ids.length > 0) {
         try {
