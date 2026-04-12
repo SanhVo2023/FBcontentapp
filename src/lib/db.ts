@@ -11,6 +11,7 @@ type BrandRow = {
   brand_name: string;
   tagline: string;
   logo: string;
+  logos: Array<{ id: string; url: string; label: string }> | null;
   color_primary: string;
   color_secondary: string;
   color_accent: string;
@@ -101,6 +102,7 @@ function toBrandConfig(row: BrandRow): BrandConfig {
     brand_name: row.brand_name,
     tagline: row.tagline || "",
     logo: row.logo || "",
+    logos: row.logos || [],
     color_primary: row.color_primary || "#1a56db",
     color_secondary: row.color_secondary || "#1e3a5f",
     color_accent: row.color_accent || "#f59e0b",
@@ -190,6 +192,7 @@ export async function saveBrand(brand: BrandConfig): Promise<void> {
         brand_name: brand.brand_name,
         tagline: brand.tagline,
         logo: brand.logo,
+        logos: brand.logos || [],
         color_primary: brand.color_primary,
         color_secondary: brand.color_secondary,
         color_accent: brand.color_accent,

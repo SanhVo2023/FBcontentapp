@@ -24,11 +24,14 @@ export const FB_STYLES = [
   { value: "editorial", label: "Editorial", desc: "Magazine-quality, sophisticated" },
 ];
 
+export type LogoVariant = { id: string; url: string; label: string };
+
 export type BrandConfig = {
   brand_id: string;
   brand_name: string;
   tagline: string;
   logo: string;
+  logos: LogoVariant[];
   color_primary: string;
   color_secondary: string;
   color_accent: string;

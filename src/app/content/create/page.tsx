@@ -7,6 +7,7 @@ import { CONTENT_TYPES, SERVICE_AREAS, CONTEXT_TYPES } from "@/lib/fb-specs";
 import type { CampaignVariant, GeneratedCampaign } from "@/lib/gemini-text";
 import { generateContentCalendarPrompt } from "@/lib/prompt-templates";
 import BrandImage from "@/components/BrandImage";
+import FacebookMockup from "@/components/content/FacebookMockup";
 
 type GoalTemplate = { id: string; name: string; description: string; post_defaults: Record<string, unknown>; schedule_pattern: string };
 
@@ -306,40 +307,55 @@ export default function CreatePostPage() {
                     </div>
                   </div>
 
-                  {/* Variant Cards */}
-                  <div className="grid grid-cols-1 gap-4">
+                  {/* Variant Cards with Facebook Mockups */}
+                  <div className="grid grid-cols-2 gap-4">
                     {editingVariants.map((v, idx) => {
                       const ct = CONTENT_TYPES.find((c) => c.value === v.content_type);
                       return (
-                        <div key={idx} className="bg-gray-900/70 border border-gray-800/50 rounded-xl p-4 hover:border-gray-700 transition">
-                          <div className="flex items-center gap-3 mb-3">
-                            <span className="text-xs font-bold text-gray-400 bg-gray-800 w-6 h-6 rounded-full flex items-center justify-center">{idx + 1}</span>
-                            {ct && <span className={`${ct.color}/20 text-white text-[10px] px-2 py-0.5 rounded font-medium`}>{ct.emoji} {ct.label}</span>}
-                            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{v.post_type}</span>
-                            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{v.style}</span>
-                            <button onClick={() => removeVariant(idx)} className="ml-auto text-gray-600 hover:text-red-400 text-xs transition">Remove</button>
+                        <div key={idx} className="bg-gray-900/70 border border-gray-800/50 rounded-xl overflow-hidden hover:border-gray-700 transition group">
+                          {/* Header bar */}
+                          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800/50">
+                            <span className="text-[10px] font-bold text-gray-400 bg-gray-800 w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</span>
+                            {ct && <span className={`${ct.color}/20 text-white text-[9px] px-1.5 py-0.5 rounded font-medium`}>{ct.emoji} {ct.label}</span>}
+                            <span className="text-[9px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{v.post_type}</span>
+                            <span className="text-[9px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{v.style}</span>
+                            <button onClick={() => removeVariant(idx)} className="ml-auto text-gray-600 hover:text-red-400 text-[10px] transition opacity-0 group-hover:opacity-100">Remove</button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <input value={v.title} onChange={(e) => updateVariant(idx, { title: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white font-medium" />
+                          {/* Facebook Mockup Preview */}
+                          <div className="p-3">
+                            <FacebookMockup
+                              brandName={brand?.brand_name || "Brand"}
+                              brandLogo={brand?.logo}
+                              caption={v.caption_vi || v.caption_en || ""}
+                              headline={v.headline}
+                              subline={v.subline}
+                              cta={v.cta}
+                              postType={v.post_type}
+                              style={v.style}
+                              compact
+                            />
+                          </div>
+
+                          {/* Editable fields (collapsible) */}
+                          <details className="border-t border-gray-800/50">
+                            <summary className="px-3 py-1.5 text-[10px] text-gray-500 cursor-pointer hover:text-gray-300 select-none">Edit content</summary>
+                            <div className="px-3 pb-3 space-y-1.5">
+                              <input value={v.title} onChange={(e) => updateVariant(idx, { title: e.target.value })} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white font-medium" placeholder="Title" />
                               {v.caption_vi !== undefined && (
-                                <textarea value={v.caption_vi || ""} onChange={(e) => updateVariant(idx, { caption_vi: e.target.value })} rows={4} className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-[11px] text-white resize-none" placeholder="Vietnamese caption" />
+                                <textarea value={v.caption_vi || ""} onChange={(e) => updateVariant(idx, { caption_vi: e.target.value })} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-white resize-none" placeholder="Vietnamese caption" />
                               )}
                               {v.caption_en !== undefined && (
-                                <textarea value={v.caption_en || ""} onChange={(e) => updateVariant(idx, { caption_en: e.target.value })} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-[11px] text-white resize-none" placeholder="English caption" />
+                                <textarea value={v.caption_en || ""} onChange={(e) => updateVariant(idx, { caption_en: e.target.value })} rows={2} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-white resize-none" placeholder="English caption" />
                               )}
-                            </div>
-                            <div className="space-y-2">
-                              <div className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
-                                <label className="text-[9px] text-gray-500 uppercase">Banner Text</label>
-                                <input value={v.headline} onChange={(e) => updateVariant(idx, { headline: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white font-bold" placeholder="Headline" />
-                                <input value={v.subline} onChange={(e) => updateVariant(idx, { subline: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" placeholder="Subline" />
-                                <input value={v.cta} onChange={(e) => updateVariant(idx, { cta: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-blue-400" placeholder="CTA" />
+                              <div className="grid grid-cols-3 gap-1">
+                                <input value={v.headline} onChange={(e) => updateVariant(idx, { headline: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white font-bold" placeholder="Headline" />
+                                <input value={v.subline} onChange={(e) => updateVariant(idx, { subline: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white" placeholder="Subline" />
+                                <input value={v.cta} onChange={(e) => updateVariant(idx, { cta: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-blue-400" placeholder="CTA" />
                               </div>
-                              <textarea value={v.image_prompt} onChange={(e) => updateVariant(idx, { image_prompt: e.target.value })} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-[11px] text-gray-300 resize-none" placeholder="Image generation prompt" />
+                              <textarea value={v.image_prompt} onChange={(e) => updateVariant(idx, { image_prompt: e.target.value })} rows={2} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[10px] text-gray-300 resize-none" placeholder="Image prompt" />
                             </div>
-                          </div>
+                          </details>
                         </div>
                       );
                     })}
