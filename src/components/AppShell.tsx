@@ -3,13 +3,14 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { LayoutDashboard, FileText, Image, Building2, Trash2, LogOut } from "lucide-react";
+import { T } from "@/lib/ui-text";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/content", icon: FileText, label: "Content" },
-  { href: "/studio", icon: Image, label: "Studio" },
-  { href: "/brands", icon: Building2, label: "Brands" },
-  { href: "/trash", icon: Trash2, label: "Trash" },
+  { href: "/dashboard", icon: LayoutDashboard, label: T.nav_dashboard },
+  { href: "/content", icon: FileText, label: T.nav_content },
+  { href: "/studio", icon: Image, label: T.nav_studio },
+  { href: "/brands", icon: Building2, label: T.nav_brands },
+  { href: "/trash", icon: Trash2, label: T.nav_trash },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

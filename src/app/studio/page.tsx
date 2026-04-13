@@ -7,6 +7,7 @@ import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
 import BrandImage from "@/components/BrandImage";
 import { Clock, ArrowUpRight, Image as ImageIcon, Trash2, ChevronRight } from "lucide-react";
+import { T } from "@/lib/ui-text";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -190,16 +191,16 @@ export default function GeneratePage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <h1 className="text-base font-bold">Image Studio</h1>
-        <span className="text-[10px] text-gray-600">Settings auto-saved</span>
+        <h1 className="text-base font-bold">{T.studio_title}</h1>
+        <span className="text-[10px] text-gray-600 hidden sm:inline">{T.settings_saved}</span>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* Left: Controls */}
-        <div className="w-[380px] border-r border-gray-800 overflow-y-auto p-4 flex flex-col gap-3 shrink-0">
+        <div className="w-full lg:w-[380px] border-b lg:border-b-0 lg:border-r border-gray-800 overflow-y-auto p-4 flex flex-col gap-3 shrink-0 max-h-[50vh] lg:max-h-none">
           {/* Brand */}
           <div>
-            <label className="block text-[11px] font-medium text-gray-400 mb-1">Brand</label>
+            <label className="block text-[11px] font-medium text-gray-400 mb-1">{T.brand}</label>
             <select value={brand?.brand_id || ""} onChange={(e) => { setBrand(brands.find((b) => b.brand_id === e.target.value) || null); setSelectedLogo(null); }} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
               {brands.map((b) => <option key={b.brand_id} value={b.brand_id}>{b.brand_name}</option>)}
             </select>
@@ -227,7 +228,7 @@ export default function GeneratePage() {
               </div>
               <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
                 <input type="checkbox" checked={includeLogo} onChange={(e) => setIncludeLogo(e.target.checked)} className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/30 w-3.5 h-3.5" />
-                Include logo in generation
+                {T.include_logo}
               </label>
               {/* Models */}
               {brand.models?.length > 0 && (
@@ -256,7 +257,7 @@ export default function GeneratePage() {
 
           {/* Post Type */}
           <div>
-            <label className="block text-[11px] font-medium text-gray-400 mb-1">Post Type</label>
+            <label className="block text-[11px] font-medium text-gray-400 mb-1">{T.post_type}</label>
             <div className="grid grid-cols-2 gap-1">{FB_POST_TYPES.map((t) => (
               <button key={t.value} onClick={() => setPostType(t.value)} className={`py-1.5 px-2 rounded text-[11px] font-medium text-left ${postType === t.value ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
                 {t.label}<span className="text-[9px] text-gray-600 ml-1">{t.width}x{t.height}</span>
@@ -266,7 +267,7 @@ export default function GeneratePage() {
 
           {/* Prompt */}
           <div>
-            <label className="block text-[11px] font-medium text-gray-400 mb-1">Visual Description</label>
+            <label className="block text-[11px] font-medium text-gray-400 mb-1">{T.visual_desc}</label>
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} placeholder="Describe the banner..." className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 resize-none" />
           </div>
 
@@ -284,7 +285,7 @@ export default function GeneratePage() {
 
           {/* Text Overlay */}
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-medium text-gray-400">Text Overlay</label>
+            <label className="block text-[11px] font-medium text-gray-400">{T.text_overlay}</label>
             <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500" />
             <input value={subline} onChange={(e) => setSubline(e.target.value)} placeholder="Subline" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500" />
             <input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="CTA" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500" />
@@ -292,14 +293,14 @@ export default function GeneratePage() {
 
           {/* Style */}
           <div>
-            <label className="block text-[11px] font-medium text-gray-400 mb-1">Style</label>
+            <label className="block text-[11px] font-medium text-gray-400 mb-1">{T.style}</label>
             <div className="grid grid-cols-2 gap-1">{FB_STYLES.map((s) => (
               <button key={s.value} onClick={() => setStyle(s.value)} className={`py-1 px-2 rounded text-[11px] text-left ${style === s.value ? "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>{s.label}</button>
             ))}</div>
           </div>
 
           <button onClick={handleGenerate} disabled={loading || !prompt || !brand} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold rounded-lg text-sm transition">
-            {loading ? "Generating..." : `Generate ${spec.width}x${spec.height}`}
+            {loading ? T.generating : `${T.generate} ${spec.width}x${spec.height}`}
           </button>
         </div>
 
@@ -319,9 +320,9 @@ export default function GeneratePage() {
               </div>
               <div className="flex items-center gap-3 text-[10px] text-gray-400"><span>PNG</span><span>{result.width}x{result.height}</span><span>{(result.size / 1024).toFixed(0)}KB</span></div>
               <div className="flex gap-2">
-                <button onClick={handleGenerate} disabled={loading} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg">Regenerate</button>
-                <button onClick={handleUpload} disabled={uploading} className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg">{uploading ? "Uploading..." : "Upload & Save"}</button>
-                <button onClick={() => { const a = document.createElement("a"); a.href = `data:image/png;base64,${result.imageBase64}`; a.download = `fb-${postType}-${Date.now()}.png`; a.click(); }} className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg">Download</button>
+                <button onClick={handleGenerate} disabled={loading} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg">{T.regenerate}</button>
+                <button onClick={handleUpload} disabled={uploading} className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg">{uploading ? T.uploading : T.upload_save}</button>
+                <button onClick={() => { const a = document.createElement("a"); a.href = `data:image/png;base64,${result.imageBase64}`; a.download = `fb-${postType}-${Date.now()}.png`; a.click(); }} className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg">{T.download}</button>
               </div>
               {uploadResult && (
                 <div className="w-full bg-gray-900 rounded-lg px-3 py-2 text-xs space-y-0.5">
@@ -340,7 +341,7 @@ export default function GeneratePage() {
         </div>
 
         {/* Right: Gallery / History */}
-        <div className="w-[280px] border-l border-gray-800 flex flex-col overflow-hidden shrink-0 hidden lg:flex">
+        <div className="w-full lg:w-[280px] border-t lg:border-t-0 lg:border-l border-gray-800 flex flex-col overflow-hidden shrink-0 hidden lg:flex">
           {/* Tabs */}
           <div className="flex border-b border-gray-800 shrink-0">
             <button onClick={() => setGalleryTab("gallery")} className={`flex-1 py-2 text-[11px] font-medium transition ${galleryTab === "gallery" ? "text-blue-400 border-b-2 border-blue-400" : "text-gray-500 hover:text-gray-300"}`}>

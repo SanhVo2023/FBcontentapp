@@ -7,6 +7,7 @@ import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { CONTENT_TYPES, POST_STATUSES, SERVICE_AREAS, FB_POST_TYPES } from "@/lib/fb-specs";
 import BrandImage from "@/components/BrandImage";
 import FacebookPreview from "@/components/content/FacebookPreview";
+import { T } from "@/lib/ui-text";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
 type PostImageRow = { id: string; post_id: string; variant_type: string; r2_url: string; status: string; created_at: string; version?: number; approved?: boolean };
@@ -158,10 +159,10 @@ export default function PostDetailPage() {
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[10px] text-white">
             {POST_STATUSES.filter((s) => s.value !== "trashed").map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <button onClick={handleDuplicate} className="px-2 py-1 bg-gray-800 text-gray-400 text-[10px] rounded-lg hover:bg-gray-700">Duplicate</button>
-          <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">Trash</button>
+          <button onClick={handleDuplicate} className="px-2 py-1 bg-gray-800 text-gray-400 text-[10px] rounded-lg hover:bg-gray-700 hidden sm:block">{T.duplicate}</button>
+          <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">{T.trash}</button>
           <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[10px] font-bold rounded-lg">
-            {saving ? "..." : "Save"} <span className="text-blue-300 text-[8px]">^S</span>
+            {saving ? "..." : T.save} <span className="text-blue-300 text-[8px] hidden sm:inline">^S</span>
           </button>
         </div>
       </div>
@@ -169,9 +170,9 @@ export default function PostDetailPage() {
       {/* Tabs */}
       <div className="border-b border-gray-800 px-4 flex gap-0 shrink-0">
         {([
-          { key: "content" as Tab, label: "Content", icon: "📝" },
-          { key: "image" as Tab, label: "Image", icon: "🎨" },
-          { key: "settings" as Tab, label: "Settings", icon: "⚙️" },
+          { key: "content" as Tab, label: T.tab_content, icon: "📝" },
+          { key: "image" as Tab, label: T.tab_image, icon: "🎨" },
+          { key: "settings" as Tab, label: T.tab_settings, icon: "⚙️" },
         ]).map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2.5 text-xs font-medium border-b-2 transition ${tab === t.key ? "text-blue-400 border-blue-400" : "text-gray-500 border-transparent hover:text-gray-300"}`}>
             {t.icon} {t.label}
@@ -181,9 +182,9 @@ export default function PostDetailPage() {
 
       {/* Main */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-5 grid grid-cols-5 gap-5">
-          {/* Left: Tab content (3 cols) */}
-          <div className="col-span-3 space-y-4">
+        <div className="max-w-6xl mx-auto p-4 lg:p-5 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-5">
+          {/* Left: Tab content */}
+          <div className="lg:col-span-3 space-y-4">
             {/* Title (always visible) */}
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Post title..." className="w-full bg-transparent text-xl font-bold text-white placeholder-gray-600 outline-none border-b border-gray-800 pb-2 focus:border-blue-500 transition" />
 
@@ -336,7 +337,7 @@ export default function PostDetailPage() {
           </div>
 
           {/* Right: Preview (2 cols) */}
-          <div className="col-span-2">
+          <div className="lg:col-span-2 hidden lg:block">
             <div className="sticky top-5">
               <FacebookPreview
                 brandName={brand?.brand_name || "Brand"}

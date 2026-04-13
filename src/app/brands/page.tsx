@@ -5,6 +5,7 @@ import type { BrandConfig, LogoVariant } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
 import { generateBrandConfigPrompt } from "@/lib/prompt-templates";
 import { Plus, Trash2, Upload, Palette, Users, ImageIcon, Type, Target } from "lucide-react";
+import { T } from "@/lib/ui-text";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -89,21 +90,21 @@ export default function BrandsPage() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <h1 className="text-base font-bold">Brands</h1>
+        <h1 className="text-base font-bold">{T.brands_title}</h1>
         <div className="ml-auto flex gap-2">
           <button onClick={handleCopyBrandPrompt} className="px-3 py-1.5 bg-purple-600/20 text-purple-400 text-xs rounded-lg hover:bg-purple-600/30 border border-purple-500/30">
-            {promptCopied ? "Copied!" : "AI Prompt"}
+            {promptCopied ? T.copied : T.ai_prompt}
           </button>
-          <button onClick={() => setShowImport(true)} className="px-3 py-1.5 bg-green-600/20 text-green-400 text-xs rounded-lg hover:bg-green-600/30">Import</button>
-          <button onClick={handleNew} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded-lg flex items-center gap-1"><Plus size={12} /> New</button>
+          <button onClick={() => setShowImport(true)} className="px-3 py-1.5 bg-green-600/20 text-green-400 text-xs rounded-lg hover:bg-green-600/30">{T.import_json}</button>
+          <button onClick={handleNew} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded-lg flex items-center gap-1"><Plus size={12} /> {T.create}</button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left: Brand list */}
-        <div className="w-[260px] border-r border-gray-800 overflow-y-auto p-3 space-y-1.5">
+        <div className="w-full md:w-[260px] border-b md:border-b-0 md:border-r border-gray-800 overflow-x-auto md:overflow-y-auto p-3 flex md:flex-col gap-1.5 md:space-y-0 shrink-0 max-h-[120px] md:max-h-none">
           {brands.map((b) => (
-            <button key={b.brand_id} onClick={() => setEditing({ ...b, logos: b.logos || [] })} className={`w-full text-left p-3 rounded-xl border transition ${editing?.brand_id === b.brand_id ? "bg-gray-800/80 border-amber-500/40 ring-1 ring-amber-500/20" : "bg-gray-900/30 border-gray-800/50 hover:border-gray-700 hover:bg-gray-900/50"}`}>
+            <button key={b.brand_id} onClick={() => setEditing({ ...b, logos: b.logos || [] })} className={`shrink-0 md:w-full text-left p-3 rounded-xl border transition ${editing?.brand_id === b.brand_id ? "bg-gray-800/80 border-amber-500/40 ring-1 ring-amber-500/20" : "bg-gray-900/30 border-gray-800/50 hover:border-gray-700 hover:bg-gray-900/50"}`}>
               <div className="flex items-center gap-2.5">
                 {b.logo ? <img src={b.logo} className="h-10 w-10 rounded-lg bg-white p-0.5 object-contain" alt="" /> : <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-sm font-bold text-gray-500">{b.brand_name?.[0]}</div>}
                 <div className="min-w-0">
@@ -320,10 +321,10 @@ export default function BrandsPage() {
               {/* Actions */}
               <div className="flex items-center gap-3 pt-2 border-t border-gray-800">
                 <button onClick={handleSave} disabled={saving} className="px-8 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl text-sm disabled:bg-gray-700 transition">
-                  {saving ? "Saving..." : "Save Brand"}
+                  {saving ? T.saving : T.save_brand}
                 </button>
                 {msg && <span className={`text-sm ${msg === "Saved!" ? "text-green-400" : "text-red-400"}`}>{msg}</span>}
-                <button onClick={handleDelete} className="ml-auto px-3 py-2 text-gray-600 hover:text-red-400 text-xs transition flex items-center gap-1"><Trash2 size={12} /> Delete</button>
+                <button onClick={handleDelete} className="ml-auto px-3 py-2 text-gray-600 hover:text-red-400 text-xs transition flex items-center gap-1"><Trash2 size={12} /> {T.delete_brand}</button>
               </div>
             </div>
           ) : (

@@ -8,6 +8,7 @@ import type { CampaignVariant, GeneratedCampaign } from "@/lib/gemini-text";
 import { generateContentCalendarPrompt } from "@/lib/prompt-templates";
 import BrandImage from "@/components/BrandImage";
 import FacebookMockup from "@/components/content/FacebookMockup";
+import { T } from "@/lib/ui-text";
 
 type GoalTemplate = { id: string; name: string; description: string; post_defaults: Record<string, unknown>; schedule_pattern: string };
 
@@ -228,7 +229,7 @@ export default function CreatePostPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <h1 className="text-base font-bold">Create Content</h1>
+        <h1 className="text-base font-bold">{T.create_title}</h1>
         <select value={brand?.brand_id || ""} onChange={(e) => { const b = brands.find((x) => x.brand_id === e.target.value); if (b) setBrand(b); }} className="ml-4 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white">
           {brands.map((b) => <option key={b.brand_id} value={b.brand_id}>{b.brand_name}</option>)}
         </select>
@@ -242,8 +243,8 @@ export default function CreatePostPage() {
           {/* ===== MODE SELECT ===== */}
           {mode === "select" && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white">How do you want to create?</h2>
-              <div className="grid grid-cols-3 gap-4">
+              <h2 className="text-xl font-bold text-white">{T.create_how}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <button onClick={() => setMode("campaign")} className="bg-gradient-to-br from-amber-600/20 to-orange-600/5 border border-amber-500/30 rounded-xl p-6 hover:border-amber-500/60 transition text-left group relative overflow-hidden">
                   <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[9px] font-bold rounded">NEW</div>
                   <div className="text-3xl mb-3">🚀</div>
@@ -342,7 +343,7 @@ export default function CreatePostPage() {
                   </div>
 
                   {/* Variant Cards with Facebook Mockups */}
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     {editingVariants.map((v, idx) => {
                       const ct = CONTENT_TYPES.find((c) => c.value === v.content_type);
                       return (

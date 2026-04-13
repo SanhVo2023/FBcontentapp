@@ -144,7 +144,7 @@ export default function CampaignDetailPage() {
 
       {/* Variant Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {posts.map((post) => {
             const ct = CONTENT_TYPES.find((c) => c.value === post.content_type);
             const isGenerating = generatingVariants.has(post.id);
