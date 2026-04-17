@@ -47,6 +47,10 @@ export type PostRow = {
   scheduled_date: string | null;
   trashed_at: string | null;
   created_from: string;
+  sheet_post_id: string | null;
+  sheet_row_url: string | null;
+  sheet_status: string | null;
+  sheet_synced_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -138,6 +142,10 @@ function toPostConfig(row: PostRow): PostConfig {
     status: row.status || "draft",
     scheduled_date: row.scheduled_date || undefined,
     trashed_at: row.trashed_at || undefined,
+    sheet_post_id: row.sheet_post_id || undefined,
+    sheet_row_url: row.sheet_row_url || undefined,
+    sheet_status: row.sheet_status || undefined,
+    sheet_synced_at: row.sheet_synced_at || undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -346,6 +354,10 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.trashed_at !== undefined) dbUpdates.trashed_at = updates.trashed_at;
   if (updates.brand_id !== undefined) dbUpdates.brand_id = updates.brand_id;
   if (updates.campaign_id !== undefined) dbUpdates.campaign_id = updates.campaign_id || null;
+  if (updates.sheet_post_id !== undefined) dbUpdates.sheet_post_id = updates.sheet_post_id || null;
+  if (updates.sheet_row_url !== undefined) dbUpdates.sheet_row_url = updates.sheet_row_url || null;
+  if (updates.sheet_status !== undefined) dbUpdates.sheet_status = updates.sheet_status || null;
+  if (updates.sheet_synced_at !== undefined) dbUpdates.sheet_synced_at = updates.sheet_synced_at || null;
 
   const { data, error } = await supabase
     .from("posts")

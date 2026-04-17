@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__notion__API-post-search",
+      "mcp__notion__API-create-a-data-source",
+      "mcp__notion__API-post-page",
+      "mcp__notion__API-patch-page",
+      "mcp__notion__API-patch-block-children",
+      "mcp__notion__API-get-users",
+      "WebSearch"
+    ]
+  }
+}

@@ -8,6 +8,7 @@ import type { BrandConfig, PostConfig, CampaignConfig } from "@/lib/fb-specs";
 import { CAMPAIGN_STATUSES, CONTENT_TYPES, CONTEXT_TYPES } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
 import FacebookMockup from "@/components/content/FacebookMockup";
+import { T } from "@/lib/ui-text";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -31,6 +32,7 @@ export default function CampaignDetailPage() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [generatingVariants, setGeneratingVariants] = useState<Set<string>>(new Set());
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [pushingAll, setPushingAll] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -95,6 +97,26 @@ export default function CampaignDetailPage() {
     try { await api("/api/posts/images", { action: "approve", image_id: imageId }); await loadPostImages(postId); showMsg("Approved"); } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
   };
 
+  const handlePushAllToSheet = async () => {
+    setPushingAll(true);
+    try {
+      const pushable = posts.filter((p) => !p.sheet_post_id && (p.status === "approved" || p.status === "images_done"));
+      if (pushable.length === 0) { showMsg("Không có bài nào cần đẩy"); setPushingAll(false); return; }
+      let ok = 0;
+      for (const p of pushable) {
+        try {
+          const r = await api("/api/sheet-sync", { action: "push_post", post_id: p.id });
+          if (r?.sheet_post_id) {
+            setPosts((prev) => prev.map((x) => x.id === p.id ? { ...x, sheet_post_id: r.sheet_post_id, sheet_row_url: r.sheet_url } : x));
+            ok++;
+          }
+        } catch { /* skip and continue */ }
+      }
+      showMsg(`Đã đẩy ${ok}/${pushable.length} bài lên Sheet`);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi đồng bộ"); }
+    finally { setPushingAll(false); }
+  };
+
   const handleTrashCampaign = async () => {
     if (!campaign || !confirm("Trash this campaign?")) return;
     try { await api("/api/campaigns", { action: "trash", campaign_id: campaign.id }); router.push("/content"); } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
@@ -126,6 +148,9 @@ export default function CampaignDetailPage() {
           </select>
           <button onClick={handleGenerateAll} disabled={generatingVariants.size > 0 || !brand} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[11px] font-medium rounded-lg flex items-center gap-1.5">
             <Image size={12} /> Generate All
+          </button>
+          <button onClick={handlePushAllToSheet} disabled={pushingAll} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-500 disabled:bg-gray-700 text-white text-[11px] font-medium rounded-lg hidden md:block">
+            {pushingAll ? T.pushing_to_sheet : T.push_all_to_sheet}
           </button>
           <button onClick={handleTrashCampaign} className="p-1.5 bg-gray-800 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg"><Trash2 size={14} /></button>
         </div>

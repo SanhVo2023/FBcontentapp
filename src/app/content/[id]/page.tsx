@@ -63,6 +63,9 @@ export default function PostDetailPage() {
   const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
   const [newTagName, setNewTagName] = useState("");
 
+  // Sheet sync
+  const [sheetBusy, setSheetBusy] = useState<"push" | "pull" | null>(null);
+
   const backBrand = searchParams.get("brand") || post?.brand_id || "";
   const backUrl = backBrand ? `/content?brand=${backBrand}` : "/content";
 
@@ -134,6 +137,31 @@ export default function PostDetailPage() {
     showMsg("Images generated");
   }, [brand, selectedVariants, prompt, headline, subline, cta, postId, title, style, useModel]);
 
+  const handlePushToSheet = async () => {
+    setSheetBusy("push"); setError(null);
+    try {
+      const r = await api("/api/sheet-sync", { action: "push_post", post_id: postId });
+      if (r?.sheet_post_id && post) {
+        setPost({ ...post, sheet_post_id: r.sheet_post_id, sheet_row_url: r.sheet_url, sheet_status: "Pending Hiển Approval" });
+      }
+      showMsg(T.pushed_to_sheet);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : T.sheet_sync_error); }
+    finally { setSheetBusy(null); }
+  };
+  const handlePullStatus = async () => {
+    setSheetBusy("pull"); setError(null);
+    try {
+      const r = await api("/api/sheet-sync", { action: "pull_status", post_id: postId });
+      if (r?.found && post) {
+        setPost({ ...post, sheet_status: r.status });
+        showMsg(`${T.sheet_status}: ${r.status}`);
+      } else if (!r?.found) {
+        setError("Không tìm thấy bài trong Sheet");
+      }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : T.sheet_sync_error); }
+    finally { setSheetBusy(null); }
+  };
+
   const handleAddTag = async (tagId: string) => { await api("/api/tags", { action: "add_to_post", post_id: postId, tag_id: tagId }); const tag = allTags.find((t) => t.id === tagId); if (tag) setPostTags((prev) => [...prev, tag]); };
   const handleRemoveTag = async (tagId: string) => { await api("/api/tags", { action: "remove_from_post", post_id: postId, tag_id: tagId }); setPostTags((prev) => prev.filter((t) => t.id !== tagId)); };
   const handleCreateTag = async () => { if (!newTagName || !post?.brand_id) return; const tag = await api("/api/tags", { action: "create", brand_id: post.brand_id, name: newTagName }); setAllTags((prev) => [...prev, tag]); setNewTagName(""); };
@@ -159,6 +187,21 @@ export default function PostDetailPage() {
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[10px] text-white">
             {POST_STATUSES.filter((s) => s.value !== "trashed").map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
+          {/* Sheet sync */}
+          {post?.sheet_post_id ? (
+            <div className="hidden md:flex items-center gap-1">
+              <a href={post.sheet_row_url || "#"} target="_blank" rel="noreferrer" className="px-2 py-1 bg-green-500/15 text-green-400 text-[10px] rounded-lg hover:bg-green-500/25 border border-green-500/30">
+                Sheet: {post.sheet_post_id}
+              </a>
+              <button onClick={handlePullStatus} disabled={sheetBusy !== null} className="px-2 py-1 bg-gray-800 text-gray-400 text-[10px] rounded-lg hover:bg-gray-700">
+                {sheetBusy === "pull" ? T.pulling_status : T.pull_status}
+              </button>
+            </div>
+          ) : (status === "approved" || status === "images_done") ? (
+            <button onClick={handlePushToSheet} disabled={sheetBusy !== null} className="hidden md:inline px-2 py-1 bg-amber-500/15 text-amber-400 text-[10px] rounded-lg hover:bg-amber-500/25 border border-amber-500/30">
+              {sheetBusy === "push" ? T.pushing_to_sheet : T.push_to_sheet}
+            </button>
+          ) : null}
           <button onClick={handleDuplicate} className="px-2 py-1 bg-gray-800 text-gray-400 text-[10px] rounded-lg hover:bg-gray-700 hidden sm:block">{T.duplicate}</button>
           <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">{T.trash}</button>
           <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[10px] font-bold rounded-lg">

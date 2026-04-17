@@ -85,6 +85,12 @@ export type PostConfig = {
   created_at?: string;
   updated_at?: string;
 
+  // Sheet sync
+  sheet_post_id?: string;       // e.g., "VN-042"
+  sheet_row_url?: string;       // direct link to sheet row
+  sheet_status?: string;        // latest pulled status from sheet
+  sheet_synced_at?: string;     // ISO timestamp of last sync
+
   // Legacy compat
   result_url?: string;
   drive_url?: string;
