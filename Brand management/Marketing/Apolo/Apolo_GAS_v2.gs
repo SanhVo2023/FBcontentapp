@@ -157,7 +157,7 @@ function _buildPostsSheet(ss, sheetName, title, lang) {
   sh.setRowHeight(1, 36); sh.setRowHeight(2, 44);
 
   // Column widths
-  const widths = [90, 110, 100, 100, 140, 200, 400, 220, 200, 110, 160, 130, 120, 160, 160, 220, 110, 140, 220, 0, 140];
+  const widths = [90, 110, 100, 100, 140, 200, 400, 220, 170, 110, 160, 130, 120, 160, 160, 220, 110, 140, 220, 0, 140];
   widths.forEach((w, i) => { if (w > 0) sh.setColumnWidth(i + 1, w); });
   sh.hideColumns(20); // app_id hidden
 
@@ -727,7 +727,15 @@ function _createPostRow(data) {
   sh.getRange(r, POST_COLS.TOPIC).setValue(data.topic || '');
   sh.getRange(r, POST_COLS.CAPTION).setValue(data.caption || '');
   sh.getRange(r, POST_COLS.HASHTAGS).setValue(data.hashtags || '');
-  sh.getRange(r, POST_COLS.IMAGE_URL).setValue(data.image_url || '');
+  // Image column: show inline preview via IMAGE() formula so client sees the
+  // actual banner, not just a URL. Mode 4 (explicit sizing) keeps the row tidy.
+  // Row height bumped to 160 so the image is visible.
+  if (data.image_url) {
+    sh.getRange(r, POST_COLS.IMAGE_URL).setValue(`=IMAGE("${data.image_url}";4;150;150)`);
+    sh.setRowHeight(r, 160);
+  } else {
+    sh.getRange(r, POST_COLS.IMAGE_URL).setValue('');
+  }
   sh.getRange(r, POST_COLS.ASSIGNEE).setValue(data.assignee || 'Như Ý');
   sh.getRange(r, POST_COLS.STATUS).setValue('Pending Hiển Approval');
   sh.getRange(r, POST_COLS.NEEDS_LEGAL).setValue(data.needs_legal || 'No');
