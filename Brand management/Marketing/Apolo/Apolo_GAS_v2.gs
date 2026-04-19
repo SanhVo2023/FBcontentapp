@@ -708,6 +708,22 @@ function _createPostRow(data) {
   const sh = ss.getSheetByName(sheetName);
   if (!sh) return { ok: false, error: `Sheet ${sheetName} not found. Run "Build sheet from scratch" first.` };
 
+  // DEDUP: check BOTH Posts_VN and Posts_EN for a row with matching app_id in col T (POST_COLS.APP_ID).
+  // If found, return it — don't create a duplicate.
+  for (const name of [SHEETS.VN, SHEETS.EN]) {
+    const existing = ss.getSheetByName(name);
+    if (!existing) continue;
+    const scan = existing.getRange(3, POST_COLS.APP_ID, 500, 1).getValues();
+    for (let i = 0; i < scan.length; i++) {
+      if (String(scan[i][0]) === String(data.app_id)) {
+        const foundRow = 3 + i;
+        const existingId = existing.getRange(foundRow, POST_COLS.POST_ID).getValue();
+        const sheetUrl = `${ss.getUrl()}#gid=${existing.getSheetId()}&range=A${foundRow}`;
+        return { ok: true, post_id: existingId, row: foundRow, sheet_url: sheetUrl, dedup: true };
+      }
+    }
+  }
+
   // Find first empty row from row 3
   const lastRow = sh.getLastRow();
   let r = 3;

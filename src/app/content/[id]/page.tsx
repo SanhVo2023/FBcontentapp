@@ -10,8 +10,9 @@ import EditableFacebookPost from "@/components/content/EditableFacebookPost";
 import CaptionToolbar from "@/components/content/CaptionToolbar";
 import AIComposerPanel from "@/components/content/AIComposerPanel";
 import ImageGenPanel from "@/components/content/ImageGenPanel";
+import CommentsPanel from "@/components/client/CommentsPanel";
 import { T } from "@/lib/ui-text";
-import { X, MessageSquare, ImageIcon, Settings, ExternalLink, RotateCcw, Send } from "lucide-react";
+import { X, MessageSquare, ImageIcon, Settings, ExternalLink, RotateCcw, Send, MoreHorizontal } from "lucide-react";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
 type PostImageRow = { id: string; post_id: string; variant_type: string; r2_url: string; status: string; created_at: string; version?: number; approved?: boolean };
@@ -24,7 +25,7 @@ async function api(url: string, body?: unknown) {
   try { const d = JSON.parse(text); if (!res.ok) throw new Error(d.error || "Failed"); return d; } catch (e) { if (e instanceof Error && e.message !== "Failed") throw new Error(`Bad: ${text.slice(0, 80)}`); throw e; }
 }
 
-type DrawerMode = "caption" | "image" | "settings" | null;
+type DrawerMode = "caption" | "image" | "settings" | "comments" | null;
 
 export default function PostDetailPage() {
   const params = useParams();
@@ -77,6 +78,9 @@ export default function PostDetailPage() {
   const [newTagName, setNewTagName] = useState("");
   const [sheetBusy, setSheetBusy] = useState<"push" | "pull" | null>(null);
   const [approvalNotes, setApprovalNotes] = useState<string>("");
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [submittingClient, setSubmittingClient] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
 
   const viTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const enTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -120,6 +124,10 @@ export default function PostDetailPage() {
         try {
           const resp = await api(`/api/posts/images?post_id=${postId}`);
           if (resp?.images) setImages(resp.images);
+        } catch { /* ok */ }
+        try {
+          const cr = await api(`/api/posts/comments?post_id=${postId}`);
+          setCommentCount((cr?.comments || []).length);
         } catch { /* ok */ }
       } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
       finally { setLoading(false); }
@@ -206,6 +214,25 @@ export default function PostDetailPage() {
   const handleTrash = async () => { await api("/api/posts", { action: "trash", post_id: postId }); router.push(backUrl); };
   const handleDuplicate = async () => { const dup = await api("/api/posts", { action: "duplicate", post_id: postId }); if (dup?.id) router.push(`/content/${dup.id}`); };
 
+  const handleSubmitForClient = async () => {
+    setSubmittingClient(true); setError(null);
+    try {
+      // Save current draft first so client sees latest content
+      await handleSave();
+      // Then flip status to "submitted" and reset client verify state
+      await api("/api/posts", { action: "update", post_id: postId, updates: {
+        status: "submitted",
+        client_verify_text: "pending",
+        client_verify_image: "pending",
+        client_approval_notes: null,
+      }});
+      if (post) setPost({ ...post, status: "submitted", client_verify_text: "pending", client_verify_image: "pending", client_approval_notes: undefined });
+      setStatus("submitted");
+      showMsg("Đã gửi cho khách duyệt");
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Gửi thất bại"); }
+    finally { setSubmittingClient(false); }
+  };
+
   const handlePushToSheet = async () => {
     setSheetBusy("push"); setError(null);
     try {
@@ -267,6 +294,13 @@ export default function PostDetailPage() {
 
   const canSubmit = (status === "draft" || status === "images_done" || status === "approved") && !post.sheet_post_id;
   const isSubmitted = !!post.sheet_post_id;
+  // Client portal flags
+  const hasCaption = !!(captionVi.trim() || captionEn.trim());
+  const hasImage = !!previewImageUrl;
+  const canSubmitClient = hasCaption && hasImage && (status === "draft" || status === "images_done") && post.client_verify_text !== "approved";
+  const isSubmittedForClient = status === "submitted" && post.client_verify_text !== "approved";
+  const isClientApproved = post.client_verify_text === "approved" && post.client_verify_image === "approved";
+  const clientRejectedOrRevise = post.client_verify_text === "rejected" || post.client_verify_image === "rejected" || post.client_verify_text === "revise" || post.client_verify_image === "revise";
   const sheetStatusLabel =
     post.sheet_status === "Approved" ? T.sheet_approved :
     post.sheet_status === "Rejected" ? T.sheet_rejected :
@@ -292,30 +326,48 @@ export default function PostDetailPage() {
           <button onClick={() => setDrawerMode("caption")} title="Soạn caption" className={`p-1.5 rounded transition ${drawerMode === "caption" ? "bg-blue-500/20 text-blue-400" : "text-gray-500 hover:text-white"}`}><MessageSquare size={14} /></button>
           <button onClick={() => setDrawerMode("image")} title="Tạo hình" className={`p-1.5 rounded transition ${drawerMode === "image" ? "bg-purple-500/20 text-purple-400" : "text-gray-500 hover:text-white"}`}><ImageIcon size={14} /></button>
           <button onClick={handleSettingsClick} title="Cài đặt" className={`p-1.5 rounded transition ${drawerMode === "settings" ? "bg-amber-500/20 text-amber-400" : "text-gray-500 hover:text-white"}`}><Settings size={14} /></button>
+          <button onClick={() => setDrawerMode("comments")} title="Bình luận" className={`p-1.5 rounded transition relative ${drawerMode === "comments" ? "bg-green-500/20 text-green-400" : "text-gray-500 hover:text-white"}`}>
+            <MessageSquare size={14} />
+            {commentCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{commentCount}</span>}
+          </button>
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
           {msg && <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded">{msg}</span>}
           {error && <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded max-w-[200px] truncate">{error}</span>}
 
-          {/* Sheet actions */}
-          {canSubmit && (
-            <button onClick={handlePushToSheet} disabled={sheetBusy !== null} className="hidden md:inline px-2.5 py-1 bg-teal-600/20 text-teal-400 text-[11px] rounded-lg hover:bg-teal-600/30 border border-teal-500/30 flex items-center gap-1">
-              <Send size={10} /> {sheetBusy === "push" ? T.pushing_to_sheet : T.push_to_sheet}
+          {/* Primary: Gửi cho khách duyệt */}
+          {canSubmitClient && (
+            <button onClick={handleSubmitForClient} disabled={submittingClient} className="hidden md:inline px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[11px] font-semibold rounded-lg flex items-center gap-1">
+              <Send size={10} /> {submittingClient ? "Đang gửi..." : "Gửi khách duyệt"}
             </button>
           )}
-          {isSubmitted && (
-            <button onClick={handlePullStatus} disabled={sheetBusy !== null} className="hidden md:inline px-2.5 py-1 bg-gray-800 text-gray-300 text-[11px] rounded-lg hover:bg-gray-700 flex items-center gap-1">
-              <RotateCcw size={10} /> {sheetBusy === "pull" ? T.pulling_status : T.pull_status}
-            </button>
+          {isSubmittedForClient && (
+            <span className="hidden md:inline-flex items-center gap-1 px-2 py-1 bg-amber-500/15 text-amber-400 text-[10px] rounded-lg border border-amber-500/30">
+              ⏳ Đang chờ khách duyệt
+            </span>
           )}
-          {isSubmitted && post.sheet_row_url && (
-            <a href={post.sheet_row_url} target="_blank" rel="noreferrer" className="hidden md:inline p-1.5 text-green-400 hover:text-green-300" title="Mở Sheet">
-              <ExternalLink size={12} />
-            </a>
+          {isClientApproved && (
+            <span className="hidden md:inline-flex items-center gap-1 px-2 py-1 bg-green-500/15 text-green-400 text-[10px] rounded-lg border border-green-500/30">
+              ✓ Khách đã duyệt
+            </span>
           )}
 
-          <button onClick={handleDuplicate} className="hidden sm:block px-2 py-1 bg-gray-800 text-gray-400 text-[10px] rounded-lg hover:bg-gray-700">{T.duplicate}</button>
+          {/* Sheet sync: moved under ⋯ menu */}
+          <div className="relative">
+            <button onClick={() => setShowMoreMenu(!showMoreMenu)} className="p-1 text-gray-500 hover:text-white rounded"><MoreHorizontal size={14} /></button>
+            {showMoreMenu && (
+              <div className="absolute right-0 top-full mt-1 w-52 bg-gray-900 border border-gray-800 rounded-lg shadow-xl z-20 py-1">
+                <div className="text-[9px] text-gray-600 px-3 py-1 uppercase">Đồng bộ Sheet (tùy chọn)</div>
+                {canSubmit && <button onClick={() => { handlePushToSheet(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.push_to_sheet}</button>}
+                {isSubmitted && <button onClick={() => { handlePullStatus(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.pull_status}</button>}
+                {isSubmitted && post.sheet_row_url && <a href={post.sheet_row_url} target="_blank" rel="noreferrer" className="block px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-800">Mở trên Sheet</a>}
+                <div className="border-t border-gray-800 my-1" />
+                <button onClick={() => { handleDuplicate(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.duplicate}</button>
+              </div>
+            )}
+          </div>
+
           <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">{T.trash}</button>
           <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[10px] font-bold rounded-lg">
             {saving ? "..." : T.save} <span className="text-blue-300 text-[8px] hidden sm:inline">^S</span>
@@ -327,6 +379,24 @@ export default function PostDetailPage() {
       <div className="flex-1 overflow-hidden flex">
         {/* Main column: FB mockup */}
         <div className={`flex-1 overflow-y-auto p-6 ${drawerMode ? "hidden md:block" : "block"}`}>
+          {/* Client approval status banner */}
+          {(isSubmittedForClient || isClientApproved || clientRejectedOrRevise) && (
+            <div className={`max-w-[540px] mx-auto mb-3 rounded-lg border px-3 py-2 text-sm flex items-center gap-2 ${
+              isClientApproved ? "bg-green-500/10 border-green-500/30 text-green-300" :
+              clientRejectedOrRevise ? "bg-red-500/10 border-red-500/30 text-red-300" :
+              "bg-amber-500/10 border-amber-500/30 text-amber-300"
+            }`}>
+              {isClientApproved ? "✓ Khách đã duyệt cả nội dung và hình" :
+                clientRejectedOrRevise ? (
+                  <>
+                    <span>⚠️ Khách yêu cầu chỉnh sửa.</span>
+                    {post.client_approval_notes && <span className="text-xs italic">{post.client_approval_notes}</span>}
+                  </>
+                ) :
+                <>⏳ Đang chờ khách duyệt {post.client_verify_text === "approved" && "(nội dung ✓)"} {post.client_verify_image === "approved" && "(hình ✓)"}</>}
+            </div>
+          )}
+
           <EditableFacebookPost
             brandName={brand?.brand_name || "Brand"}
             brandLogo={brand?.logo}
@@ -367,7 +437,7 @@ export default function PostDetailPage() {
           <div className={`${drawerMode ? "block" : "hidden"} w-full md:w-[420px] md:border-l border-gray-800 overflow-y-auto bg-gray-950 shrink-0`}>
             <div className="sticky top-0 bg-gray-950 border-b border-gray-800 px-4 py-2 flex items-center gap-2 z-10">
               <span className="text-xs font-semibold text-gray-300">
-                {drawerMode === "caption" ? "📝 Soạn nội dung" : drawerMode === "image" ? "🎨 Tạo hình ảnh" : "⚙️ Cài đặt"}
+                {drawerMode === "caption" ? "📝 Soạn nội dung" : drawerMode === "image" ? "🎨 Tạo hình ảnh" : drawerMode === "comments" ? "💬 Bình luận" : "⚙️ Cài đặt"}
               </span>
               <button onClick={() => { setDrawerMode(null); setEditingCaption(false); }} className="ml-auto text-gray-500 hover:text-white p-1"><X size={14} /></button>
             </div>
@@ -419,6 +489,10 @@ export default function PostDetailPage() {
 
               {drawerMode === "image" && brand && post && (
                 <ImageGenPanel post={post} brand={brand} onUploaded={handleImageUploaded} />
+              )}
+
+              {drawerMode === "comments" && post && (
+                <CommentsPanel postId={post.id} apiBase="/api/posts/comments" myRole="creator" myName="Team" />
               )}
 
               {drawerMode === "settings" && (

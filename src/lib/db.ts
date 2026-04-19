@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { BrandConfig, PostConfig, CampaignConfig, CampaignStatus, ContextType } from "./fb-specs";
+import type { BrandConfig, PostConfig, CampaignConfig, CampaignStatus, ContextType, ClientVerifyState, PostComment } from "./fb-specs";
 
 // ============================================
 // TYPE MAPPINGS (Supabase row ↔ App types)
@@ -22,6 +22,7 @@ type BrandRow = {
   models: Array<{ id: string; name: string; photo: string; description: string }>;
   references: Array<{ id: string; path: string; description: string }>;
   sample_posts: Array<{ id: string; label: string; text: string }> | null;
+  client_password: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -63,6 +64,10 @@ export type PostRow = {
   ads_budget_per_day: number | null;
   ads_duration_days: number | null;
   ads_campaign_id: string | null;
+  client_verify_text: string | null;
+  client_verify_image: string | null;
+  client_approval_notes: string | null;
+  client_approved_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +82,15 @@ export type PostImageRow = {
   status: string;
   version: number;
   approved: boolean;
+  created_at: string;
+};
+
+export type PostCommentRow = {
+  id: string;
+  post_id: string;
+  author_role: string;
+  author_name: string | null;
+  body: string;
   created_at: string;
 };
 
@@ -129,6 +143,7 @@ function toBrandConfig(row: BrandRow): BrandConfig {
     models: row.models || [],
     references: row.references || [],
     sample_posts: row.sample_posts || [],
+    client_password: row.client_password || undefined,
   };
 }
 
@@ -170,6 +185,10 @@ function toPostConfig(row: PostRow): PostConfig {
     ads_budget_per_day: row.ads_budget_per_day ?? undefined,
     ads_duration_days: row.ads_duration_days ?? undefined,
     ads_campaign_id: row.ads_campaign_id || undefined,
+    client_verify_text: (row.client_verify_text as ClientVerifyState) || "pending",
+    client_verify_image: (row.client_verify_image as ClientVerifyState) || "pending",
+    client_approval_notes: row.client_approval_notes || undefined,
+    client_approved_at: row.client_approved_at || undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -235,6 +254,7 @@ export async function saveBrand(brand: BrandConfig): Promise<void> {
         models: brand.models,
         references: brand.references,
         sample_posts: brand.sample_posts || [],
+        client_password: brand.client_password ?? null,
       },
       { onConflict: "brand_id" }
     );
@@ -424,6 +444,10 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.ads_budget_per_day !== undefined) dbUpdates.ads_budget_per_day = updates.ads_budget_per_day ?? null;
   if (updates.ads_duration_days !== undefined) dbUpdates.ads_duration_days = updates.ads_duration_days ?? null;
   if (updates.ads_campaign_id !== undefined) dbUpdates.ads_campaign_id = updates.ads_campaign_id || null;
+  if (updates.client_verify_text !== undefined) dbUpdates.client_verify_text = updates.client_verify_text || null;
+  if (updates.client_verify_image !== undefined) dbUpdates.client_verify_image = updates.client_verify_image || null;
+  if (updates.client_approval_notes !== undefined) dbUpdates.client_approval_notes = updates.client_approval_notes || null;
+  if (updates.client_approved_at !== undefined) dbUpdates.client_approved_at = updates.client_approved_at || null;
 
   // Resilient update: if DB rejects because a column doesn't exist (old schema,
   // migration not run), strip the offending column and retry. Prevents a single
@@ -433,6 +457,7 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
     "ads_enabled", "ads_name", "ads_objective", "ads_audience", "ads_audience_detail",
     "ads_placement", "ads_cta", "ads_landing_url", "ads_budget_per_day",
     "ads_duration_days", "ads_campaign_id", "campaign_id",
+    "client_verify_text", "client_verify_image", "client_approval_notes", "client_approved_at",
   ];
   let result = await supabase.from("posts").update(dbUpdates).eq("id", postId).select().single();
   let attempts = 0;
@@ -923,4 +948,66 @@ export async function trashNonApprovedImages(postId: string): Promise<void> {
     .eq("post_id", postId)
     .eq("approved", false)
     .neq("status", "trashed");
+}
+
+// ============================================
+// POST COMMENTS
+// ============================================
+
+function toPostComment(row: PostCommentRow): PostComment {
+  return {
+    id: row.id,
+    post_id: row.post_id,
+    author_role: row.author_role === "client" ? "client" : "creator",
+    author_name: row.author_name,
+    body: row.body,
+    created_at: row.created_at,
+  };
+}
+
+export async function getPostComments(postId: string): Promise<PostComment[]> {
+  const { data, error } = await supabase
+    .from("post_comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as PostCommentRow[]).map(toPostComment);
+}
+
+export async function getPostCommentCounts(postIds: string[]): Promise<Record<string, number>> {
+  if (postIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("post_comments")
+    .select("post_id")
+    .in("post_id", postIds);
+  if (error) throw new Error(error.message);
+  const counts: Record<string, number> = {};
+  for (const row of data || []) counts[row.post_id] = (counts[row.post_id] || 0) + 1;
+  return counts;
+}
+
+export async function createComment(input: {
+  post_id: string;
+  author_role: "client" | "creator";
+  author_name?: string | null;
+  body: string;
+}): Promise<PostComment> {
+  const { data, error } = await supabase
+    .from("post_comments")
+    .insert({
+      post_id: input.post_id,
+      author_role: input.author_role,
+      author_name: input.author_name ?? null,
+      body: input.body,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return toPostComment(data as PostCommentRow);
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  const { error } = await supabase.from("post_comments").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }

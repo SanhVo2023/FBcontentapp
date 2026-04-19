@@ -19,7 +19,7 @@ const EMPTY_BRAND: BrandConfig = {
   brand_id: "", brand_name: "", tagline: "", logo: "", logos: [],
   color_primary: "#1a1a2e", color_secondary: "#c5a55a", color_accent: "#ffffff",
   font_style: "", models: [], references: [], sample_posts: [],
-  tone: "", industry: "", target_audience: "",
+  tone: "", industry: "", target_audience: "", client_password: "",
 };
 
 export default function BrandsPage() {
@@ -149,6 +149,22 @@ export default function BrandsPage() {
                     <label className="text-[10px] text-gray-500 mb-0.5 block">Industry</label>
                     <input value={editing.industry} onChange={(e) => setEditing({ ...editing, industry: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-amber-500/30 outline-none" />
                   </div>
+                </div>
+              </section>
+
+              {/* Client Access */}
+              <section className="space-y-3 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue-300 uppercase tracking-wider">🔑 Client Access</div>
+                <p className="text-[11px] text-gray-500">Đặt mật khẩu để khách hàng đăng nhập tại <code className="text-blue-400">/client</code> xem và duyệt bài.</p>
+                <div>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">Mật khẩu cho khách</label>
+                  <input
+                    type="text"
+                    value={editing.client_password || ""}
+                    onChange={(e) => setEditing({ ...editing, client_password: e.target.value })}
+                    placeholder="Để trống = khách không đăng nhập được"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500/30 outline-none font-mono"
+                  />
                 </div>
               </section>
 

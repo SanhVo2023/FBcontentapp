@@ -17,7 +17,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // No shell for login page
-  if (pathname === "/") return <>{children}</>;
+  // No admin shell on login or client portal
+  if (pathname === "/" || pathname.startsWith("/client")) return <>{children}</>;
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";

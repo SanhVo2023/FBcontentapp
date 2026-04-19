@@ -44,6 +44,20 @@ export type BrandConfig = {
   tone: string;
   industry: string;
   target_audience: string;
+  client_password?: string;    // admin-set in brands page; enables brand client login to /client
+};
+
+// Client-side approval state (populated by /client portal actions)
+export type ClientVerifyState = "pending" | "approved" | "rejected" | "revise";
+
+// Post comment (shared between creator + client)
+export type PostComment = {
+  id: string;
+  post_id: string;
+  author_role: "client" | "creator";
+  author_name: string | null;
+  body: string;
+  created_at: string;
 };
 
 export const TONE_PRESETS = [
@@ -121,6 +135,12 @@ export type PostConfig = {
   ads_budget_per_day?: number;
   ads_duration_days?: number;
   ads_campaign_id?: string;     // CMP-### from sheet after push
+
+  // Client portal approval state
+  client_verify_text?: ClientVerifyState;
+  client_verify_image?: ClientVerifyState;
+  client_approval_notes?: string;
+  client_approved_at?: string;
 
   // Legacy compat
   result_url?: string;
