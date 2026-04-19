@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Image as ImageIcon, Download, Check, RotateCcw, Copy } from "lucide-react";
+import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus } from "lucide-react";
 import type { BrandConfig, PostConfig, PostType } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
@@ -12,6 +12,10 @@ type Props = {
   post: PostConfig;
   brand: BrandConfig;
   onUploaded?: (r2_url: string) => void;
+  /** Which version ID is selected for preview on the parent FB mockup */
+  selectedImageId?: string | null;
+  /** Called when user clicks a version to view it */
+  onSelectImage?: (img: PostImageRow) => void;
 };
 
 async function api(url: string, body?: unknown) {
@@ -22,7 +26,7 @@ async function api(url: string, body?: unknown) {
   try { const d = JSON.parse(text); if (!res.ok) throw new Error(d.error || "Failed"); return d; } catch (e) { if (e instanceof Error && e.message !== "Failed") throw new Error(`Bad: ${text.slice(0, 100)}`); throw e; }
 }
 
-export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
+export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId, onSelectImage }: Props) {
   const [postType, setPostType] = useState<PostType>(post.type || "feed-square");
   const [style, setStyle] = useState(post.style || "professional");
   const [prompt, setPrompt] = useState(post.prompt || "");
@@ -35,16 +39,16 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
   const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
   const [variants, setVariants] = useState<Set<string>>(new Set([post.type || "feed-square"]));
 
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<PostImageRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
-  const [generatingVariants, setGeneratingVariants] = useState<Set<string>>(new Set());
+  // Placeholders for variants currently being generated (used for skeleton tiles)
+  const [pendingVariants, setPendingVariants] = useState<string[]>([]);
+  const loading = pendingVariants.length > 0;
 
   const spec = getPostSpec(postType);
   const activeLogo = selectedLogo || brand?.logo || (brand?.logos?.[0]?.url);
 
-  // Load existing images for the post
   const loadImages = useCallback(async () => {
     try {
       const r = await api(`/api/posts/images?post_id=${post.id}`);
@@ -60,10 +64,12 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) { setError("Nhập mô tả hình ảnh"); return; }
-    setLoading(true); setError(null);
+    if (variants.size === 0) { setError("Chọn ít nhất 1 định dạng"); return; }
+    setError(null);
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
     const types = Array.from(variants);
-    setGeneratingVariants(new Set(types));
+    setPendingVariants(types);
+
     try {
       for (const type of types) {
         try {
@@ -82,13 +88,14 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
             const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
             if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
           }
-          setGeneratingVariants((p) => { const n = new Set(p); n.delete(type); return n; });
-        } catch { /* skip this variant */ }
+        } catch { /* skip this variant; continue others */ }
+        // Remove this variant from pending list as soon as it finishes
+        setPendingVariants((p) => p.filter((t) => t !== type));
+        await loadImages();
       }
-      await loadImages();
-      showMsg("✨ Đã tạo hình");
+      showMsg("✨ Đã tạo xong");
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
-    finally { setLoading(false); setGeneratingVariants(new Set()); }
+    finally { setPendingVariants([]); }
   };
 
   const handleApprove = async (imageId: string) => {
@@ -101,7 +108,7 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
     <div className="space-y-3">
       {/* Brand + Logo selector */}
       {brand && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 space-y-2">
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 space-y-2.5">
           <div>
             <span className="text-[10px] text-gray-500 uppercase font-semibold">{T.logo}</span>
             <div className="flex gap-2 mt-1 flex-wrap">
@@ -117,9 +124,9 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
               ))}
             </div>
           </div>
-          <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+          <label className={`flex items-center gap-2 text-[11px] cursor-pointer ${includeLogo ? "text-gray-300" : "text-amber-400"}`}>
             <input type="checkbox" checked={includeLogo} onChange={(e) => setIncludeLogo(e.target.checked)} className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/30 w-3.5 h-3.5" />
-            {T.include_logo}
+            {includeLogo ? T.include_logo : "Không gắn logo — AI sẽ được cấm render logo/watermark"}
           </label>
 
           {brand.models?.length > 0 && (
@@ -192,36 +199,70 @@ export default function ImageGenPanel({ post, brand, onUploaded }: Props) {
       {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5 text-red-400 text-xs">{error}</div>}
       {msg && <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-1.5 text-green-400 text-xs">{msg}</div>}
 
-      {/* Generate */}
-      <button onClick={handleGenerate} disabled={loading || !prompt.trim()} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition">
+      {/* Generate — always available; generates new versions every time */}
+      <button
+        onClick={handleGenerate}
+        disabled={loading || !prompt.trim()}
+        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition"
+      >
         {loading ? (
-          <><Loader2 className="animate-spin" size={14} /> {T.generating}</>
+          <><Loader2 className="animate-spin" size={14} /> Đang tạo {pendingVariants.length} định dạng...</>
+        ) : doneImages.length === 0 ? (
+          <><ImageIcon size={14} /> Tạo hình ({variants.size}) {spec.width}x{spec.height}</>
         ) : (
-          <><ImageIcon size={14} /> {T.generate} ({variants.size}) {spec.width}x{spec.height}</>
+          <><Plus size={14} /> Tạo thêm phiên bản ({variants.size})</>
         )}
       </button>
 
-      {/* Versions */}
-      {doneImages.length > 0 && (
+      {/* Versions gallery: skeletons + real versions */}
+      {(pendingVariants.length > 0 || doneImages.length > 0) && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-2 space-y-1.5">
-          <label className="text-[10px] text-gray-500 uppercase font-semibold">{T.image_versions} ({doneImages.length})</label>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-gray-500 uppercase font-semibold">Phiên bản hình ({doneImages.length})</label>
+            {doneImages.length > 0 && <span className="text-[9px] text-gray-600">Click để xem trên mockup</span>}
+          </div>
           <div className="grid grid-cols-3 gap-1.5">
-            {doneImages.map((img) => (
-              <div key={img.id} className={`relative rounded overflow-hidden border group ${img.approved ? "border-green-500" : "border-gray-700"}`}>
-                <img src={img.r2_url} className="w-full aspect-square object-cover" alt="" />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-1 flex items-center justify-between">
-                  <span className="text-[8px] text-gray-300">{img.variant_type} v{img.version}</span>
-                  {img.approved ? (
-                    <span className="text-[8px] text-green-400 flex items-center gap-0.5"><Check size={8} /></span>
-                  ) : (
-                    <button onClick={() => handleApprove(img.id)} className="text-[8px] text-blue-400 hover:text-blue-300">Duyệt</button>
-                  )}
-                </div>
-                <button onClick={() => navigator.clipboard.writeText(img.r2_url)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white text-[7px] px-1.5 py-0.5 rounded">
-                  <Copy size={8} />
-                </button>
+            {/* Skeleton placeholders while generating */}
+            {pendingVariants.map((t) => (
+              <div key={`sk-${t}`} className="relative rounded overflow-hidden border border-blue-500/40 bg-gray-800 aspect-square flex flex-col items-center justify-center animate-pulse">
+                <Loader2 className="animate-spin text-blue-400 mb-1" size={18} />
+                <span className="text-[8px] text-gray-400">{t}</span>
+                <span className="text-[8px] text-blue-400 mt-0.5">đang tạo...</span>
               </div>
             ))}
+            {/* Real versions */}
+            {doneImages.map((img) => {
+              const isSelected = selectedImageId === img.id;
+              return (
+                <button
+                  key={img.id}
+                  type="button"
+                  onClick={() => onSelectImage?.(img)}
+                  className={`relative rounded overflow-hidden border-2 transition group cursor-pointer ${
+                    isSelected ? "border-blue-400 ring-2 ring-blue-400/40" : img.approved ? "border-green-500" : "border-gray-700 hover:border-gray-500"
+                  }`}
+                  title={isSelected ? "Đang xem" : "Click để xem trên mockup"}
+                >
+                  <img src={img.r2_url} className="w-full aspect-square object-cover" alt="" />
+                  {isSelected && (
+                    <div className="absolute top-1 left-1 bg-blue-500 text-white text-[8px] px-1 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                      <Eye size={8} /> Đang xem
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-1 flex items-center justify-between">
+                    <span className="text-[8px] text-gray-300">{img.variant_type} v{img.version}</span>
+                    {img.approved ? (
+                      <span className="text-[8px] text-green-400 flex items-center gap-0.5"><Check size={8} />Duyệt</span>
+                    ) : (
+                      <button onClick={(e) => { e.stopPropagation(); handleApprove(img.id); }} className="text-[8px] text-blue-400 hover:text-blue-300">Duyệt</button>
+                    )}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(img.r2_url); }} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white text-[7px] px-1.5 py-0.5 rounded">
+                    <Copy size={8} />
+                  </button>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

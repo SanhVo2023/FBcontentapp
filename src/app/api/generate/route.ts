@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const { post, brand, testMode, includeLogo = true } = (await req.json()) as { post: PostConfig; brand: BrandConfig; testMode: boolean; includeLogo?: boolean };
     const spec = getPostSpec(post.type);
-    const prompt = buildFBBannerPrompt(post, brand);
+    const prompt = buildFBBannerPrompt(post, brand, { includeLogo });
 
     const images: Array<{ base64: string; mimeType: string; label: string }> = [];
 

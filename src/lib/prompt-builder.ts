@@ -1,8 +1,11 @@
 import type { BrandConfig, PostConfig } from "./fb-specs";
 import { getPostSpec } from "./fb-specs";
 
-export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig): string {
+type BuildOpts = { includeLogo?: boolean };
+
+export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig, opts: BuildOpts = {}): string {
   const spec = getPostSpec(post.type);
+  const includeLogo = opts.includeLogo !== false; // default true
 
   const lines: string[] = [
     `Generate a Facebook ${spec.label} banner image at exactly ${spec.width}x${spec.height} pixels (${spec.aspect} aspect ratio).`,
@@ -29,14 +32,27 @@ export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig): strin
     `FACEBOOK OPTIMIZATION RULES:`,
     `- Text overlay must occupy LESS THAN 20% of total image area`,
     `- Keep ALL key content in the CENTER 80% of the image (safe zone for mobile crop)`,
-    `- LOGO HANDLING (CRITICAL): A brand logo has been provided as a reference image. You MUST:
+  );
+
+  if (includeLogo) {
+    lines.push(
+      `- LOGO HANDLING (CRITICAL): A brand logo has been provided as a reference image. You MUST:
   1. REMOVE the logo's background completely — make it transparent/seamless with the banner
   2. Place the EXACT original logo pixels as-is — do NOT redraw, regenerate, or alter ANY part of it
   3. Keep every letter, word, shape, color, and detail PIXEL-PERFECT identical to the original
   4. Do NOT add, remove, change, or re-spell any text that appears on the logo
   5. Position it in the bottom-right or top-left corner, small but readable (8-12% of image width)
   6. The logo must blend into the banner as if it were a transparent PNG overlay with NO visible background rectangle or box behind it
-  7. If the logo has a white or solid background, CUT IT OUT so only the logo graphic remains`,
+  7. If the logo has a white or solid background, CUT IT OUT so only the logo graphic remains`
+    );
+  } else {
+    // User explicitly turned off the logo — emit a STRONG negative so the AI doesn't invent one.
+    lines.push(
+      `- NO LOGO (CRITICAL): Do NOT render, overlay, add, draw, invent, or suggest ANY logo, brand mark, watermark, crest, shield, badge, monogram, initials, signature, seal, icon representing a company, or stylized text resembling a brand name anywhere in the image. The banner must be free of any branding marks. NO LOGO. NO WATERMARK. NO BRAND ICONS.`
+    );
+  }
+
+  lines.push(
     `- Use HIGH CONTRAST colors for maximum feed visibility`,
     `- ONE clear focal point — do not clutter the composition`,
     `- Clean, professional composition with intentional white space`,

@@ -81,6 +81,7 @@ export default function PostDetailPage() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [submittingClient, setSubmittingClient] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
 
   const viTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const enTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -288,7 +289,8 @@ export default function PostDetailPage() {
 
   const approvedImage = images.find((i) => i.approved && i.status === "done");
   const firstImage = images.find((i) => i.status === "done");
-  const previewImageUrl = approvedImage?.r2_url || firstImage?.r2_url || null;
+  const selectedImage = selectedImageId ? images.find((i) => i.id === selectedImageId) : null;
+  const previewImageUrl = selectedImage?.r2_url || approvedImage?.r2_url || firstImage?.r2_url || null;
   const currentCaption = displayLanguage === "vi" ? captionVi : captionEn;
   const setCurrentCaption = displayLanguage === "vi" ? setCaptionVi : setCaptionEn;
   const currentTextareaRef = displayLanguage === "vi" ? viTextareaRef : enTextareaRef;
@@ -493,7 +495,13 @@ export default function PostDetailPage() {
               )}
 
               {drawerMode === "image" && brand && post && (
-                <ImageGenPanel post={post} brand={brand} onUploaded={handleImageUploaded} />
+                <ImageGenPanel
+                  post={post}
+                  brand={brand}
+                  onUploaded={handleImageUploaded}
+                  selectedImageId={selectedImageId}
+                  onSelectImage={(img) => setSelectedImageId(img.id)}
+                />
               )}
 
               {drawerMode === "comments" && post && (
