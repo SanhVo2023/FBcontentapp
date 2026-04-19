@@ -51,8 +51,23 @@ export async function POST(req: NextRequest) {
 
     if (!post_id) return NextResponse.json({ error: "Thiếu post_id" }, { status: 400 });
 
+    // Env var sanity check — returns clear error instead of generic 500
+    if (!GAS_URL || !GAS_SECRET) {
+      return NextResponse.json({
+        error: "Sheet sync chưa cấu hình. Thiếu GAS_WEBAPP_URL hoặc GAS_SHARED_SECRET trong env.",
+        hint: "Kiểm tra Netlify env vars hoặc .env.local",
+      }, { status: 500 });
+    }
+
     if (action === "push_post") {
-      const post = await getPost(post_id);
+      let post;
+      try {
+        post = await getPost(post_id);
+      } catch (dbErr: unknown) {
+        const m = dbErr instanceof Error ? dbErr.message : String(dbErr);
+        console.error("[sheet-sync] getPost failed:", m);
+        return NextResponse.json({ error: `DB error loading post: ${m}`, hint: "Có thể cần chạy migration SQL cho cột ads_* hoặc sheet_*" }, { status: 500 });
+      }
       if (!post) return NextResponse.json({ error: "Không tìm thấy bài viết" }, { status: 404 });
 
       // Get first image URL if any
@@ -83,39 +98,63 @@ export async function POST(req: NextRequest) {
         start_date: post.scheduled_date || new Date().toISOString().slice(0, 10),
       } : null;
 
-      const result = await callGasPost({
-        action: "create_post",
-        data: {
-          app_id: post.id,
-          language: lang,
-          fanpage: lang === "vi" ? "Apolo VN" : "Apolo EN",
-          planned_date: post.scheduled_date || new Date().toISOString().slice(0, 10),
-          channel: "Facebook",
-          format: spec.label,
-          topic: post.topic || post.title || "",
-          caption,
-          hashtags: "",
-          image_url,
-          assignee: "Như Ý",
-          needs_legal: post.legal_context ? "Yes" : "No",
-          will_run_ads: post.ads_enabled ? "Yes" : "No",
-          ads: adsBlock,
-        },
-      });
-
-      if (!result.ok) {
-        return NextResponse.json({ error: result.error || "GAS push failed" }, { status: 500 });
+      let result;
+      try {
+        result = await callGasPost({
+          action: "create_post",
+          data: {
+            app_id: post.id,
+            language: lang,
+            fanpage: lang === "vi" ? "Apolo VN" : "Apolo EN",
+            planned_date: post.scheduled_date || new Date().toISOString().slice(0, 10),
+            channel: "Facebook",
+            format: spec.label,
+            topic: post.topic || post.title || "",
+            caption,
+            hashtags: "",
+            image_url,
+            assignee: "Như Ý",
+            needs_legal: post.legal_context ? "Yes" : "No",
+            will_run_ads: post.ads_enabled ? "Yes" : "No",
+            ads: adsBlock,
+          },
+        });
+      } catch (gasErr: unknown) {
+        const m = gasErr instanceof Error ? gasErr.message : String(gasErr);
+        console.error("[sheet-sync] GAS call failed:", m);
+        return NextResponse.json({ error: `GAS call failed: ${m}`, hint: "Kiểm tra GAS_WEBAPP_URL + SHARED_SECRET, hoặc re-deploy Apps Script (Deploy ▸ Manage ▸ New version)" }, { status: 500 });
       }
 
-      // Save sheet reference to Supabase and mark post as submitted
-      await updatePost(post_id, {
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error || "GAS push failed", gas_response: result }, { status: 500 });
+      }
+
+      // Save sheet reference to Supabase — build updates progressively so a missing
+      // column doesn't break the whole save.
+      const supabaseUpdates: Record<string, unknown> = {
         status: "submitted",
         sheet_post_id: result.post_id,
         sheet_row_url: result.sheet_url,
         sheet_status: "Pending Hiển Approval",
         sheet_synced_at: new Date().toISOString(),
-        ads_campaign_id: result.ads?.campaign_id || undefined,
-      });
+      };
+      if (result.ads?.campaign_id) {
+        supabaseUpdates.ads_campaign_id = result.ads.campaign_id;
+      }
+      try {
+        await updatePost(post_id, supabaseUpdates);
+      } catch (dbErr: unknown) {
+        const m = dbErr instanceof Error ? dbErr.message : String(dbErr);
+        console.error("[sheet-sync] updatePost after push failed:", m);
+        // Row was already pushed to sheet — don't fail outright; return a partial-success
+        return NextResponse.json({
+          ok: true,
+          sheet_post_id: result.post_id,
+          sheet_url: result.sheet_url,
+          warning: `Đã đẩy lên Sheet nhưng không lưu được về DB: ${m}`,
+          hint: "Chạy migration SQL: thêm cột sheet_post_id / sheet_row_url / sheet_status / sheet_synced_at / ads_campaign_id vào bảng posts",
+        });
+      }
 
       return NextResponse.json({ ok: true, sheet_post_id: result.post_id, sheet_url: result.sheet_url, ads_campaign_id: result.ads?.campaign_id });
     }

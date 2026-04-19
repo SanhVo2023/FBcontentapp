@@ -425,12 +425,29 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.ads_duration_days !== undefined) dbUpdates.ads_duration_days = updates.ads_duration_days ?? null;
   if (updates.ads_campaign_id !== undefined) dbUpdates.ads_campaign_id = updates.ads_campaign_id || null;
 
-  const { data, error } = await supabase
-    .from("posts")
-    .update(dbUpdates)
-    .eq("id", postId)
-    .select()
-    .single();
+  // Resilient update: if DB rejects because a column doesn't exist (old schema,
+  // migration not run), strip the offending column and retry. Prevents a single
+  // missing column from blocking all saves.
+  const optionalCols = [
+    "sheet_post_id", "sheet_row_url", "sheet_status", "sheet_synced_at",
+    "ads_enabled", "ads_name", "ads_objective", "ads_audience", "ads_audience_detail",
+    "ads_placement", "ads_cta", "ads_landing_url", "ads_budget_per_day",
+    "ads_duration_days", "ads_campaign_id", "campaign_id",
+  ];
+  let result = await supabase.from("posts").update(dbUpdates).eq("id", postId).select().single();
+  let attempts = 0;
+  while (result.error && attempts < optionalCols.length) {
+    const msg = result.error.message || "";
+    const match = msg.match(/column\s+"?([a-z_]+)"?\s+(?:of\s+relation|does not exist)/i)
+      || msg.match(/could not find\s+the\s+['"]?([a-z_]+)['"]?\s+column/i);
+    const missingCol = match?.[1];
+    if (!missingCol || !(missingCol in dbUpdates)) break;
+    console.warn(`[db] Missing column "${missingCol}", stripping and retrying update`);
+    delete dbUpdates[missingCol];
+    result = await supabase.from("posts").update(dbUpdates).eq("id", postId).select().single();
+    attempts++;
+  }
+  const { data, error } = result;
   if (error) throw new Error(error.message);
   return toPostConfig(data as PostRow);
 }
