@@ -66,6 +66,7 @@ export type PostRow = {
   ads_campaign_id: string | null;
   client_verify_text: string | null;
   client_verify_image: string | null;
+  client_verify_ads: string | null;
   client_approval_notes: string | null;
   client_approved_at: string | null;
   created_at: string;
@@ -92,6 +93,7 @@ export type PostCommentRow = {
   author_name: string | null;
   body: string;
   created_at: string;
+  edited_at: string | null;
 };
 
 export type CampaignRow = {
@@ -187,6 +189,7 @@ function toPostConfig(row: PostRow): PostConfig {
     ads_campaign_id: row.ads_campaign_id || undefined,
     client_verify_text: (row.client_verify_text as ClientVerifyState) || "pending",
     client_verify_image: (row.client_verify_image as ClientVerifyState) || "pending",
+    client_verify_ads: (row.client_verify_ads as ClientVerifyState) || "pending",
     client_approval_notes: row.client_approval_notes || undefined,
     client_approved_at: row.client_approved_at || undefined,
     created_at: row.created_at,
@@ -446,6 +449,7 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.ads_campaign_id !== undefined) dbUpdates.ads_campaign_id = updates.ads_campaign_id || null;
   if (updates.client_verify_text !== undefined) dbUpdates.client_verify_text = updates.client_verify_text || null;
   if (updates.client_verify_image !== undefined) dbUpdates.client_verify_image = updates.client_verify_image || null;
+  if (updates.client_verify_ads !== undefined) dbUpdates.client_verify_ads = updates.client_verify_ads || null;
   if (updates.client_approval_notes !== undefined) dbUpdates.client_approval_notes = updates.client_approval_notes || null;
   if (updates.client_approved_at !== undefined) dbUpdates.client_approved_at = updates.client_approved_at || null;
 
@@ -457,7 +461,7 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
     "ads_enabled", "ads_name", "ads_objective", "ads_audience", "ads_audience_detail",
     "ads_placement", "ads_cta", "ads_landing_url", "ads_budget_per_day",
     "ads_duration_days", "ads_campaign_id", "campaign_id",
-    "client_verify_text", "client_verify_image", "client_approval_notes", "client_approved_at",
+    "client_verify_text", "client_verify_image", "client_verify_ads", "client_approval_notes", "client_approved_at",
   ];
   let result = await supabase.from("posts").update(dbUpdates).eq("id", postId).select().single();
   let attempts = 0;
@@ -962,6 +966,7 @@ function toPostComment(row: PostCommentRow): PostComment {
     author_name: row.author_name,
     body: row.body,
     created_at: row.created_at,
+    edited_at: row.edited_at || null,
   };
 }
 
@@ -1010,4 +1015,21 @@ export async function createComment(input: {
 export async function deleteComment(id: string): Promise<void> {
   const { error } = await supabase.from("post_comments").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+export async function updateComment(id: string, body: string): Promise<PostComment> {
+  const { data, error } = await supabase
+    .from("post_comments")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return toPostComment(data as PostCommentRow);
+}
+
+export async function getComment(id: string): Promise<PostComment | null> {
+  const { data, error } = await supabase.from("post_comments").select("*").eq("id", id).single();
+  if (error) return null;
+  return toPostComment(data as PostCommentRow);
 }

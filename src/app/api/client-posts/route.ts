@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClientSessionBrandId } from "@/lib/client-auth";
 import { getPosts, getPost, updatePost, getPostThumbnails, getPostCommentCounts } from "@/lib/db";
-import type { ClientVerifyState } from "@/lib/fb-specs";
+import type { ClientVerifyState, PostConfig } from "@/lib/fb-specs";
 
-function deriveAppStatusFromClient(verifyText: ClientVerifyState, verifyImage: ClientVerifyState): string | null {
-  if (verifyText === "approved" && verifyImage === "approved") return "approved";
-  if (verifyText === "rejected" || verifyImage === "rejected") return "draft";
-  if (verifyText === "revise" || verifyImage === "revise") return "draft";
-  return null; // pending — don't change status
+function deriveAppStatusFromClient(
+  post: PostConfig,
+  verifyText: ClientVerifyState,
+  verifyImage: ClientVerifyState,
+  verifyAds: ClientVerifyState,
+): string | null {
+  const adsRelevant = !!post.ads_enabled;
+  const allApproved = verifyText === "approved"
+    && verifyImage === "approved"
+    && (!adsRelevant || verifyAds === "approved");
+  if (allApproved) return "approved";
+  if (verifyText === "rejected" || verifyImage === "rejected" || (adsRelevant && verifyAds === "rejected")) return "draft";
+  if (verifyText === "revise" || verifyImage === "revise" || (adsRelevant && verifyAds === "revise")) return "draft";
+  return null;
+}
+
+/** Toggle: if already in `target`, set to "pending"; else set to `target`. */
+function toggle(current: ClientVerifyState | undefined, target: ClientVerifyState): ClientVerifyState {
+  return current === target ? "pending" : target;
 }
 
 export async function GET(req: NextRequest) {
@@ -22,7 +36,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(post);
     }
 
-    // Return all posts for this brand (exclude trashed). Client sees draft+submitted+approved.
     const { posts } = await getPosts({ brandId });
     const visible = posts.filter((p) => p.status !== "trashed");
     const ids = visible.map((p) => p.id);
@@ -48,42 +61,47 @@ export async function POST(req: NextRequest) {
 
     const currentText: ClientVerifyState = post.client_verify_text || "pending";
     const currentImage: ClientVerifyState = post.client_verify_image || "pending";
+    const currentAds: ClientVerifyState = post.client_verify_ads || "pending";
     let nextText = currentText;
     let nextImage = currentImage;
+    let nextAds = currentAds;
     let notes: string | null = post.client_approval_notes ?? null;
 
     switch (action) {
       case "approve_text":
-        nextText = "approved";
+        nextText = toggle(currentText, "approved");
         break;
       case "approve_image":
-        nextImage = "approved";
+        nextImage = toggle(currentImage, "approved");
+        break;
+      case "approve_ads":
+        nextAds = toggle(currentAds, "approved");
         break;
       case "reject":
-        nextText = "rejected";
-        nextImage = "rejected";
+        nextText = "rejected"; nextImage = "rejected";
+        if (post.ads_enabled) nextAds = "rejected";
         notes = note || null;
         break;
       case "revise":
-        nextText = "revise";
-        nextImage = "revise";
+        nextText = "revise"; nextImage = "revise";
+        if (post.ads_enabled) nextAds = "revise";
         notes = note || null;
         break;
       case "reset":
-        nextText = "pending";
-        nextImage = "pending";
+        nextText = "pending"; nextImage = "pending"; nextAds = "pending";
         notes = null;
         break;
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
 
-    const updates: Partial<typeof post> = {
+    const updates: Partial<PostConfig> = {
       client_verify_text: nextText,
       client_verify_image: nextImage,
+      client_verify_ads: nextAds,
       client_approval_notes: notes ?? undefined,
     };
-    const newStatus = deriveAppStatusFromClient(nextText, nextImage);
+    const newStatus = deriveAppStatusFromClient(post, nextText, nextImage, nextAds);
     if (newStatus) {
       updates.status = newStatus;
       if (newStatus === "approved") updates.client_approved_at = new Date().toISOString();

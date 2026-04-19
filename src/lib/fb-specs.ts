@@ -58,6 +58,7 @@ export type PostComment = {
   author_name: string | null;
   body: string;
   created_at: string;
+  edited_at?: string | null;
 };
 
 export const TONE_PRESETS = [
@@ -139,6 +140,7 @@ export type PostConfig = {
   // Client portal approval state
   client_verify_text?: ClientVerifyState;
   client_verify_image?: ClientVerifyState;
+  client_verify_ads?: ClientVerifyState;
   client_approval_notes?: string;
   client_approved_at?: string;
 

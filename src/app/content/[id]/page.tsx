@@ -219,14 +219,15 @@ export default function PostDetailPage() {
     try {
       // Save current draft first so client sees latest content
       await handleSave();
-      // Then flip status to "submitted" and reset client verify state
+      // Then flip status to "submitted" and reset all client verify states
       await api("/api/posts", { action: "update", post_id: postId, updates: {
         status: "submitted",
         client_verify_text: "pending",
         client_verify_image: "pending",
+        client_verify_ads: "pending",
         client_approval_notes: null,
       }});
-      if (post) setPost({ ...post, status: "submitted", client_verify_text: "pending", client_verify_image: "pending", client_approval_notes: undefined });
+      if (post) setPost({ ...post, status: "submitted", client_verify_text: "pending", client_verify_image: "pending", client_verify_ads: "pending", client_approval_notes: undefined });
       setStatus("submitted");
       showMsg("Đã gửi cho khách duyệt");
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Gửi thất bại"); }
@@ -297,10 +298,14 @@ export default function PostDetailPage() {
   // Client portal flags
   const hasCaption = !!(captionVi.trim() || captionEn.trim());
   const hasImage = !!previewImageUrl;
+  const adsRelevantForClient = !!post.ads_enabled;
   const canSubmitClient = hasCaption && hasImage && (status === "draft" || status === "images_done") && post.client_verify_text !== "approved";
   const isSubmittedForClient = status === "submitted" && post.client_verify_text !== "approved";
-  const isClientApproved = post.client_verify_text === "approved" && post.client_verify_image === "approved";
-  const clientRejectedOrRevise = post.client_verify_text === "rejected" || post.client_verify_image === "rejected" || post.client_verify_text === "revise" || post.client_verify_image === "revise";
+  const isClientApproved = post.client_verify_text === "approved" && post.client_verify_image === "approved" && (!adsRelevantForClient || post.client_verify_ads === "approved");
+  const clientRejectedOrRevise =
+    post.client_verify_text === "rejected" || post.client_verify_image === "rejected" ||
+    post.client_verify_text === "revise" || post.client_verify_image === "revise" ||
+    (adsRelevantForClient && (post.client_verify_ads === "rejected" || post.client_verify_ads === "revise"));
   const sheetStatusLabel =
     post.sheet_status === "Approved" ? T.sheet_approved :
     post.sheet_status === "Rejected" ? T.sheet_rejected :
@@ -393,7 +398,7 @@ export default function PostDetailPage() {
                     {post.client_approval_notes && <span className="text-xs italic">{post.client_approval_notes}</span>}
                   </>
                 ) :
-                <>⏳ Đang chờ khách duyệt {post.client_verify_text === "approved" && "(nội dung ✓)"} {post.client_verify_image === "approved" && "(hình ✓)"}</>}
+                <>⏳ Đang chờ khách duyệt {post.client_verify_text === "approved" && "(nội dung ✓)"} {post.client_verify_image === "approved" && "(hình ✓)"} {adsRelevantForClient && post.client_verify_ads === "approved" && "(ads ✓)"}</>}
             </div>
           )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import BrandImage from "@/components/BrandImage";
 
 type Props = {
@@ -92,7 +93,9 @@ export default function FacebookPreview({
   sponsored,
 }: Props) {
   const timeText = sponsored ? "Được tài trợ" : formatVietnameseTime(timestamp);
-  const showSeeMore = caption.split("\n").length > 7 || caption.length > 400;
+  const [expanded, setExpanded] = useState(false);
+  const canTruncate = caption.split("\n").length > 7 || caption.length > 400;
+  const showSeeMore = canTruncate && !expanded;
 
   return (
     <div
@@ -139,7 +142,9 @@ export default function FacebookPreview({
           <span style={{ color: "#65676B" }}>Nội dung bài viết sẽ xuất hiện ở đây...</span>
         )}
         {showSeeMore && (
-          <div
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
             style={{
               position: "absolute",
               bottom: 0,
@@ -151,12 +156,37 @@ export default function FacebookPreview({
               alignItems: "flex-end",
               paddingLeft: 16,
               paddingBottom: 2,
+              border: "none",
+              width: "100%",
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
             }}
+            aria-label="Xem thêm"
           >
-            <span style={{ fontSize: 15, fontWeight: 600, color: "#65676B", cursor: "pointer" }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: "#65676B" }}>
               Xem thêm
             </span>
-          </div>
+          </button>
+        )}
+        {canTruncate && expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            style={{
+              marginTop: 6,
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontSize: 15,
+              fontWeight: 600,
+              color: "#65676B",
+              fontFamily: "inherit",
+            }}
+          >
+            Thu gọn
+          </button>
         )}
       </div>
 

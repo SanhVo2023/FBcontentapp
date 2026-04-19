@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import type { PostConfig, BrandConfig } from "@/lib/fb-specs";
 import FacebookPreview from "@/components/content/FacebookPreview";
 import ApprovalBar from "@/components/client/ApprovalBar";
 import CommentsPanel from "@/components/client/CommentsPanel";
+import AdsCampaignCard from "@/components/client/AdsCampaignCard";
+
+type ClientAction = "approve_text" | "approve_image" | "approve_ads" | "reject" | "revise" | "reset";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -35,14 +38,12 @@ export default function ClientPostView() {
       if (!p) { setError("Không tìm thấy bài"); return; }
       setPost(p);
       if (p.language === "en") setDisplayLang("en");
-      // Fetch brand (public brand list has it) + thumbnail
       const publicBrands = await fetch("/api/client-auth").then((r) => r.json()).catch(() => []);
       const b = Array.isArray(publicBrands) ? publicBrands.find((x: BrandConfig) => x.brand_id === p.brand_id) : null;
       if (b) setBrand(b);
-      // thumbnail
       try {
-        const imgs = await api(`/api/client-posts`);
-        setThumb((imgs.thumbnails && imgs.thumbnails[p.id]) || null);
+        const all = await api(`/api/client-posts`);
+        setThumb((all.thumbnails && all.thumbnails[p.id]) || null);
       } catch { /* ok */ }
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
     finally { setLoading(false); }
@@ -50,7 +51,7 @@ export default function ClientPostView() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAction = async (action: "approve_text" | "approve_image" | "reject" | "revise" | "reset", note?: string) => {
+  const handleAction = async (action: ClientAction, note?: string) => {
     if (!post) return;
     setBusy(action); setError(null);
     try {
@@ -60,30 +61,49 @@ export default function ClientPostView() {
     finally { setBusy(null); }
   };
 
+  const handleLogout = async () => {
+    await fetch("/api/client-auth", { method: "DELETE" });
+    router.push("/client");
+  };
+
   if (loading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="text-gray-500 text-sm">Đang tải...</div></div>;
   if (!post) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="text-red-400 text-sm">Không tìm thấy</div></div>;
 
   const caption = displayLang === "en" ? (post.caption_en || post.caption_vi) : (post.caption_vi || post.caption_en);
   const hasBoth = post.language === "both";
+  const notes = post.client_approval_notes;
+  const hasIssues = post.client_verify_text === "rejected" || post.client_verify_image === "rejected" || post.client_verify_text === "revise" || post.client_verify_image === "revise" || post.client_verify_ads === "rejected" || post.client_verify_ads === "revise";
 
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-900/50 px-4 py-2.5 flex items-center gap-3 sticky top-0 z-10 backdrop-blur">
-        <Link href="/client/dashboard" className="text-gray-400 hover:text-white"><ArrowLeft size={16} /></Link>
-        <h1 className="text-sm font-bold text-white truncate">{post.title || "Bài viết"}</h1>
-        {hasBoth && (
-          <div className="ml-auto flex gap-1 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-            <button onClick={() => setDisplayLang("vi")} className={`px-2 py-1 text-[11px] ${displayLang === "vi" ? "bg-blue-600/20 text-blue-400" : "text-gray-500"}`}>VI</button>
-            <button onClick={() => setDisplayLang("en")} className={`px-2 py-1 text-[11px] ${displayLang === "en" ? "bg-blue-600/20 text-blue-400" : "text-gray-500"}`}>EN</button>
-          </div>
-        )}
+      <div className="border-b border-gray-800 bg-gray-900/50 sticky top-0 z-10 backdrop-blur">
+        <div className="max-w-[900px] mx-auto px-4 py-2.5 flex items-center gap-3">
+          <Link href="/client/dashboard" className="text-gray-400 hover:text-white"><ArrowLeft size={16} /></Link>
+          {brand?.logo && <img src={brand.logo} alt="" className="w-6 h-6 rounded-full object-contain bg-white p-0.5" />}
+          <h1 className="text-sm font-bold text-white truncate flex-1">{post.title || "Bài viết"}</h1>
+          {hasBoth && (
+            <div className="flex gap-1 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+              <button onClick={() => setDisplayLang("vi")} className={`px-2 py-1 text-[11px] ${displayLang === "vi" ? "bg-blue-600/20 text-blue-400" : "text-gray-500"}`}>VI</button>
+              <button onClick={() => setDisplayLang("en")} className={`px-2 py-1 text-[11px] ${displayLang === "en" ? "bg-blue-600/20 text-blue-400" : "text-gray-500"}`}>EN</button>
+            </div>
+          )}
+          <button onClick={handleLogout} className="text-gray-500 hover:text-red-400 text-xs flex items-center gap-1"><LogOut size={12} /><span className="hidden sm:inline">Đăng xuất</span></button>
+        </div>
       </div>
 
-      {error && <div className="mx-4 mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400 text-xs max-w-3xl mx-auto">{error}</div>}
+      {error && <div className="max-w-[900px] mx-auto mx-4 mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400 text-xs">{error}</div>}
 
-      <div className="max-w-3xl mx-auto p-4 space-y-4">
-        {/* FB preview (read-only) */}
+      <div className="max-w-[900px] mx-auto px-4 py-5 space-y-4">
+        {/* Rejection/revise notes banner */}
+        {hasIssues && notes && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
+            <div className="text-amber-300 font-semibold mb-1">📝 Ghi chú đã gửi team nội dung:</div>
+            <div className="text-amber-200 text-xs whitespace-pre-wrap">{notes}</div>
+          </div>
+        )}
+
+        {/* FB post preview (read-only, full width) */}
         <FacebookPreview
           brandName={brand?.brand_name || "Brand"}
           brandLogo={brand?.logo}
@@ -95,24 +115,26 @@ export default function ClientPostView() {
           sponsored
         />
 
-        {/* Approval notes banner if rejected/revise */}
-        {post.client_approval_notes && (post.client_verify_text === "rejected" || post.client_verify_image === "rejected" || post.client_verify_text === "revise" || post.client_verify_image === "revise") && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
-            <div className="text-amber-300 font-semibold mb-1">Ghi chú đã gửi team nội dung:</div>
-            <div className="text-amber-200 text-xs whitespace-pre-wrap">{post.client_approval_notes}</div>
-          </div>
-        )}
-
         {/* Approval bar */}
         <ApprovalBar
           verifyText={post.client_verify_text || "pending"}
           verifyImage={post.client_verify_image || "pending"}
+          verifyAds={post.client_verify_ads || "pending"}
+          showAdsStep={!!post.ads_enabled}
           busy={busy}
           onAction={handleAction}
         />
 
-        {/* Comments */}
-        <CommentsPanel postId={post.id} apiBase="/api/client-comments" myRole="client" myName={brand?.brand_name} />
+        {/* Ads campaign card (if enabled) */}
+        {post.ads_enabled && <AdsCampaignCard post={post} />}
+
+        {/* Comments thread — inline, full width */}
+        <CommentsPanel
+          postId={post.id}
+          apiBase="/api/client-comments"
+          myRole="client"
+          myName={brand?.brand_name}
+        />
       </div>
     </div>
   );
