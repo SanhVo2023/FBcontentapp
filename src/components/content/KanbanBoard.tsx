@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
-import { POST_STATUSES } from "@/lib/fb-specs";
+import { KANBAN_COLUMNS, getKanbanColumn } from "@/lib/fb-specs";
 import KanbanColumn from "./KanbanColumn";
 import PostCard from "./PostCard";
-
-const KANBAN_STATUSES = POST_STATUSES.filter((s) => s.value !== "trashed").map((s) => s.value);
 
 type Props = {
   postsByStatus: Record<string, PostConfig[]>;
@@ -18,16 +16,37 @@ type Props = {
 
 export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBrand, onAction }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingFrom, setDraggingFrom] = useState<"draft" | "submitted" | "approved" | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const handleDragStart = (e: React.DragEvent, postId: string) => {
+  // Regroup posts into 3 kanban columns
+  const grouped = useMemo(() => {
+    const buckets: Record<"draft" | "submitted" | "approved", PostConfig[]> = { draft: [], submitted: [], approved: [] };
+    for (const posts of Object.values(postsByStatus)) {
+      for (const p of posts) {
+        const col = getKanbanColumn(p.status);
+        if (col) buckets[col].push(p);
+      }
+    }
+    return buckets;
+  }, [postsByStatus]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleDragStart = (e: React.DragEvent, postId: string, fromColumn: "draft" | "submitted" | "approved") => {
     e.dataTransfer.setData("text/plain", postId);
     e.dataTransfer.effectAllowed = "move";
     setDraggingId(postId);
+    setDraggingFrom(fromColumn);
   };
 
   const handleDragEnd = () => {
     setDraggingId(null);
+    setDraggingFrom(null);
     setOverColumn(null);
   };
 
@@ -38,7 +57,6 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
   };
 
   const handleDragLeave = (e: React.DragEvent, status: string) => {
-    // Only clear if leaving the column itself, not entering a child
     if (overColumn === status) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const { clientX, clientY } = e;
@@ -48,42 +66,85 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
     }
   };
 
-  const handleDrop = (e: React.DragEvent, newStatus: string) => {
+  const handleDrop = (e: React.DragEvent, toColumn: "draft" | "submitted" | "approved") => {
     e.preventDefault();
     const postId = e.dataTransfer.getData("text/plain");
-    if (!postId) return;
+    const from = draggingFrom;
     setOverColumn(null);
     setDraggingId(null);
+    setDraggingFrom(null);
 
-    // Find the post's current status
-    for (const [status, posts] of Object.entries(postsByStatus)) {
-      if (posts.some((p) => p.id === postId) && status !== newStatus) {
-        onAction("update", postId, { status: newStatus });
-        break;
-      }
+    if (!postId || !from || from === toColumn) return;
+
+    // Find the post
+    let post: PostConfig | undefined;
+    for (const bucket of Object.values(grouped)) {
+      const found = bucket.find((p) => p.id === postId);
+      if (found) { post = found; break; }
+    }
+    if (!post) return;
+
+    // Enforce drag rules
+    if (toColumn === "approved") {
+      showToast("Chỉ khách duyệt trên Sheet mới chuyển sang Đã duyệt");
+      return;
+    }
+
+    if (toColumn === "submitted" && from === "draft") {
+      // Validate: has caption and has image
+      const hasCaption = !!(post.caption_vi?.trim() || post.caption_en?.trim());
+      const hasImage = !!thumbnails[post.id];
+      if (!hasCaption) { showToast("Bài viết cần có caption trước khi gửi Sheet"); return; }
+      if (!hasImage) { showToast("Bài viết cần có hình trước khi gửi Sheet"); return; }
+      onAction("submit_to_sheet", postId);
+      return;
+    }
+
+    if (toColumn === "draft" && from === "submitted") {
+      // Manual revert — just update status, don't touch sheet
+      onAction("update", postId, { status: "draft" });
+      return;
+    }
+
+    if (toColumn === "draft" && from === "approved") {
+      // Rework: move back to draft
+      onAction("update", postId, { status: "draft" });
+      return;
+    }
+
+    if (toColumn === "submitted" && from === "approved") {
+      showToast("Bài đã duyệt — không cần gửi lại");
+      return;
     }
   };
 
   return (
-    <div className="flex-1 overflow-x-auto overflow-y-hidden">
+    <div className="flex-1 overflow-x-auto overflow-y-hidden relative">
+      {toast && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-amber-500/20 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-lg text-xs z-50 backdrop-blur-sm">
+          {toast}
+        </div>
+      )}
       <div className="flex gap-3 p-4 h-full min-w-max">
-        {KANBAN_STATUSES.map((status) => {
-          const posts = postsByStatus[status] || [];
+        {KANBAN_COLUMNS.map((col) => {
+          const posts = grouped[col.key];
           return (
             <KanbanColumn
-              key={status}
-              status={status}
+              key={col.key}
+              status={col.key}
+              label={col.label}
+              dotColor={col.dotColor}
               count={posts.length}
-              isOver={overColumn === status}
-              onDragOver={(e) => handleDragOver(e, status)}
-              onDragLeave={(e) => handleDragLeave(e, status)}
-              onDrop={(e) => handleDrop(e, status)}
+              isOver={overColumn === col.key}
+              onDragOver={(e) => handleDragOver(e, col.key)}
+              onDragLeave={(e) => handleDragLeave(e, col.key)}
+              onDrop={(e) => handleDrop(e, col.key)}
             >
               {posts.map((post) => (
                 <div
                   key={post.id}
                   draggable
-                  onDragStart={(e) => handleDragStart(e, post.id)}
+                  onDragStart={(e) => handleDragStart(e, post.id, col.key)}
                   onDragEnd={handleDragEnd}
                   className={`cursor-grab active:cursor-grabbing transition-opacity ${draggingId === post.id ? "opacity-40" : ""}`}
                 >

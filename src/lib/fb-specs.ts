@@ -135,15 +135,40 @@ export const SERVICE_AREAS = [
 ];
 
 export const POST_STATUSES = [
-  { value: "draft", label: "Draft", color: "bg-gray-500" },
+  { value: "draft", label: "Nháp", color: "bg-gray-500" },
   { value: "review", label: "Review", color: "bg-yellow-500" },
-  { value: "approved", label: "Approved", color: "bg-blue-500" },
+  { value: "submitted", label: "Đã gửi Sheet", color: "bg-teal-500" },
+  { value: "approved", label: "Đã duyệt", color: "bg-green-500" },
   { value: "images_pending", label: "Images Pending", color: "bg-purple-500" },
   { value: "images_done", label: "Images Done", color: "bg-indigo-500" },
-  { value: "scheduled", label: "Scheduled", color: "bg-teal-500" },
-  { value: "published", label: "Published", color: "bg-green-500" },
-  { value: "trashed", label: "Trashed", color: "bg-red-500" },
+  { value: "scheduled", label: "Scheduled", color: "bg-blue-500" },
+  { value: "published", label: "Đã đăng", color: "bg-emerald-500" },
+  { value: "trashed", label: "Thùng rác", color: "bg-red-500" },
 ];
+
+// Kanban simplified 3-column grouping
+export const KANBAN_COLUMNS = [
+  { key: "draft" as const, label: "Nháp", color: "bg-gray-500", dotColor: "#6B7280" },
+  { key: "submitted" as const, label: "Đã gửi", color: "bg-teal-500", dotColor: "#14B8A6" },
+  { key: "approved" as const, label: "Đã duyệt", color: "bg-green-500", dotColor: "#10B981" },
+];
+
+export const KANBAN_STATUS_GROUPS: Record<"draft" | "submitted" | "approved", string[]> = {
+  draft: ["draft", "review", "images_pending", "images_done"],
+  submitted: ["submitted"],
+  approved: ["approved", "scheduled", "published"],
+};
+
+export function getKanbanColumn(status: string): "draft" | "submitted" | "approved" | null {
+  for (const [col, statuses] of Object.entries(KANBAN_STATUS_GROUPS)) {
+    if (statuses.includes(status)) return col as "draft" | "submitted" | "approved";
+  }
+  return null;
+}
+
+export function isLegacyDraftStatus(status: string): boolean {
+  return ["review", "images_pending", "images_done"].includes(status);
+}
 
 // ── Campaign Types ──
 

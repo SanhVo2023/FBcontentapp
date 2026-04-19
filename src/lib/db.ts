@@ -224,6 +224,36 @@ export async function deleteBrand(brandId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function getBrandReferenceCount(brandId: string): Promise<{ posts: number; campaigns: number; tags: number }> {
+  const [posts, campaigns, tags] = await Promise.all([
+    supabase.from("posts").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
+    supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
+    supabase.from("tags").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
+  ]);
+  return {
+    posts: posts.count || 0,
+    campaigns: campaigns.count || 0,
+    tags: tags.count || 0,
+  };
+}
+
+export async function deleteBrandCascade(brandId: string): Promise<void> {
+  const { data: postRows } = await supabase.from("posts").select("id").eq("brand_id", brandId);
+  const postIds = (postRows || []).map((r) => r.id);
+
+  if (postIds.length > 0) {
+    await supabase.from("post_tags").delete().in("post_id", postIds);
+    await supabase.from("post_images").delete().in("post_id", postIds);
+    await supabase.from("posts").delete().in("id", postIds);
+  }
+
+  await supabase.from("campaigns").delete().eq("brand_id", brandId);
+  await supabase.from("tags").delete().eq("brand_id", brandId);
+
+  const { error } = await supabase.from("brands").delete().eq("brand_id", brandId);
+  if (error) throw new Error(error.message);
+}
+
 // ============================================
 // POSTS
 // ============================================

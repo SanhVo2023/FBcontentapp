@@ -28,7 +28,8 @@ export default function BulkActions({ count, tags, onBulkAction, onDeselect }: P
           {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       )}
-      <button onClick={() => onBulkAction("delete")} className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-xs hover:bg-red-600/30">Trash</button>
+      <button onClick={() => onBulkAction("submit_to_sheet")} className="px-2 py-1 bg-teal-600/20 text-teal-400 rounded text-xs hover:bg-teal-600/30">Gửi Sheet</button>
+      <button onClick={() => onBulkAction("delete")} className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-xs hover:bg-red-600/30">Xóa</button>
       <button onClick={onDeselect} className="ml-auto text-gray-500 hover:text-white">
         <X size={14} />
       </button>

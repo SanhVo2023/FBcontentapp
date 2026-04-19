@@ -54,12 +54,19 @@ export default function BrandsPage() {
   };
 
   const handleDelete = async () => {
-    if (!editing || !confirm(`Delete "${editing.brand_name}"?`)) return;
+    if (!editing) return;
     try {
+      const refs = await api(`/api/brands?count=${editing.brand_id}`) as { posts: number; campaigns: number; tags: number };
+      const total = refs.posts + refs.campaigns + refs.tags;
+      const msg = total === 0
+        ? `Xóa thương hiệu "${editing.brand_name}"?\n\nKhông thể hoàn tác.`
+        : `Xóa thương hiệu "${editing.brand_name}"?\n\nĐiều này sẽ xóa vĩnh viễn:\n- ${refs.posts} bài viết\n- ${refs.campaigns} chiến dịch\n- ${refs.tags} thẻ\n\nKhông thể hoàn tác.`;
+      if (!confirm(msg)) return;
       await api("/api/brands", { brand_id: editing.brand_id });
       setEditing(null);
       const updated = await api("/api/brands") as BrandConfig[];
       setBrands(updated);
+      setMsg("Đã xóa!");
     } catch (e: unknown) { setMsg(e instanceof Error ? e.message : "Failed"); }
   };
 

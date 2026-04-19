@@ -63,6 +63,16 @@ function ContentHubInner() {
             onBulkAction={hub.handleBulkAction}
             onDeselect={() => hub.setSelected(new Set())}
           />
+
+          {/* Kanban-specific: manual Sheet pull button */}
+          {hub.view === "kanban" && (
+            <div className="px-4 py-1.5 border-b border-gray-800/50 flex items-center gap-2">
+              <button onClick={hub.handleBulkPullSheet} className="px-2.5 py-1 bg-teal-600/15 text-teal-400 text-[10px] rounded-lg hover:bg-teal-600/25 border border-teal-500/20">
+                🔄 Kiểm tra Sheet
+              </button>
+              <span className="text-[10px] text-gray-600">Tự động kéo trạng thái khi mở Kanban</span>
+            </div>
+          )}
         </>
       )}
 

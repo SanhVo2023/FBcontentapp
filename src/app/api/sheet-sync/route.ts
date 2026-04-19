@@ -91,8 +91,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: result.error || "GAS push failed" }, { status: 500 });
       }
 
-      // Save sheet reference to Supabase
+      // Save sheet reference to Supabase and mark post as submitted
       await updatePost(post_id, {
+        status: "submitted",
         sheet_post_id: result.post_id,
         sheet_row_url: result.sheet_url,
         sheet_status: "Pending Hiển Approval",
@@ -100,6 +101,34 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ ok: true, sheet_post_id: result.post_id, sheet_url: result.sheet_url });
+    }
+
+    if (action === "bulk_pull") {
+      const postIds = (body.post_ids as string[]) || [];
+      const results: Record<string, { status?: string; approval_notes?: string; found: boolean }> = {};
+      // Process sequentially to avoid GAS rate limiting
+      for (const pid of postIds) {
+        try {
+          const post = await getPost(pid);
+          if (!post) continue;
+          const r = await callGasGet({ action: "get_status", app_id: pid });
+          if (r?.ok && r.found) {
+            await updatePost(pid, { sheet_status: r.status, sheet_synced_at: new Date().toISOString() });
+            // Auto-move post status based on sheet approval
+            if (r.status === "Approved" && post.status === "submitted") {
+              await updatePost(pid, { status: "approved" });
+            } else if ((r.status === "Rejected" || r.status === "Revise") && post.status === "submitted") {
+              await updatePost(pid, { status: "draft" });
+            }
+            results[pid] = { status: r.status, approval_notes: r.approval_notes, found: true };
+          } else {
+            results[pid] = { found: false };
+          }
+        } catch {
+          results[pid] = { found: false };
+        }
+      }
+      return NextResponse.json({ ok: true, results });
     }
 
     if (action === "pull_status") {
@@ -114,10 +143,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, found: false });
       }
 
-      await updatePost(post_id, {
+      const updates: Record<string, unknown> = {
         sheet_status: result.status,
         sheet_synced_at: new Date().toISOString(),
-      });
+      };
+      // Auto-move status based on sheet approval when post is in submitted state
+      if (result.status === "Approved" && post.status === "submitted") {
+        updates.status = "approved";
+      } else if ((result.status === "Rejected" || result.status === "Revise") && post.status === "submitted") {
+        updates.status = "draft";
+      }
+      await updatePost(post_id, updates);
 
       return NextResponse.json({
         ok: true,
@@ -126,6 +162,7 @@ export async function POST(req: NextRequest) {
         legal_approved: result.legal_approved,
         content_approved: result.content_approved,
         approval_notes: result.approval_notes,
+        new_app_status: updates.status || post.status,
       });
     }
 
