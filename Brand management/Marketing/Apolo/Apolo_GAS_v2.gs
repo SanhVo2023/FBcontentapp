@@ -221,10 +221,12 @@ function _buildAdsSheet(ss) {
   sh.setFrozenRows(2);
 
   // Auto-calc Total Budget = Budget/day * Duration
-  // Use setFormulaLocal with ";" separators for Vietnamese/European locale
+  // Use setFormula() with US-format ","; Apps Script auto-converts for display locale.
+  const budgetFormulas = [];
   for (let r = 3; r < 303; r++) {
-    sh.getRange(r, 15).setFormulaLocal(`=IFERROR(IF(AND(L${r}<>"";N${r}<>"");L${r}*N${r};"");"")`);
+    budgetFormulas.push([`=IFERROR(IF(AND(L${r}<>"",N${r}<>""),L${r}*N${r},""),"")`]);
   }
+  sh.getRange(3, 15, 300, 1).setFormulas(budgetFormulas);
 
   const lists = SHEETS.LISTS;
   _dropdown(sh, 5, 3, 300, `=${lists}!G2:G8`);   // Objective
@@ -283,13 +285,13 @@ function _buildDashboard(ss) {
   sh.getRange(2, 2).setValue(new Date()).setNumberFormat('yyyy-MM-dd HH:mm');
 
   // KPI cards: labels row 4, values row 5 — MERGE FIRST, THEN SET FORMULA on anchor
-  // Use ";" separator (Vietnamese/European locale) via setFormulaLocal().
+  // setFormula() takes US-format (",") and Apps Script auto-converts for display locale.
   const kpiLabels = ['📋 Chờ duyệt', '📅 7 ngày tới', '🎯 Ads đang chạy', '💰 Tổng chi (₫)'];
   const kpiFormulas = [
-    `=IFERROR(COUNTIF(Posts_VN!N3:N500;"Pending")+COUNTIF(Posts_VN!O3:O500;"Pending")+COUNTIF(Posts_EN!N3:N500;"Pending")+COUNTIF(Posts_EN!O3:O500;"Pending");0)`,
-    `=IFERROR(COUNTIFS(Posts_VN!C3:C500;">="&TODAY();Posts_VN!C3:C500;"<="&(TODAY()+7))+COUNTIFS(Posts_EN!C3:C500;">="&TODAY();Posts_EN!C3:C500;"<="&(TODAY()+7));0)`,
-    `=IFERROR(COUNTIF(Ads_Campaigns!R3:R300;"Running");0)`,
-    `=IFERROR(SUMIFS(Ads_Campaigns!S3:S300;Ads_Campaigns!R3:R300;"Running");0)`,
+    `=IFERROR(COUNTIF(Posts_VN!N3:N500,"Pending")+COUNTIF(Posts_VN!O3:O500,"Pending")+COUNTIF(Posts_EN!N3:N500,"Pending")+COUNTIF(Posts_EN!O3:O500,"Pending"),0)`,
+    `=IFERROR(COUNTIFS(Posts_VN!C3:C500,">="&TODAY(),Posts_VN!C3:C500,"<="&(TODAY()+7))+COUNTIFS(Posts_EN!C3:C500,">="&TODAY(),Posts_EN!C3:C500,"<="&(TODAY()+7)),0)`,
+    `=IFERROR(COUNTIF(Ads_Campaigns!R3:R300,"Running"),0)`,
+    `=IFERROR(SUMIFS(Ads_Campaigns!S3:S300,Ads_Campaigns!R3:R300,"Running"),0)`,
   ];
   kpiLabels.forEach((lbl, i) => {
     const col = i * 2 + 1;
@@ -299,7 +301,7 @@ function _buildDashboard(ss) {
     // Value row 5 — merge first, then set formula on the merged anchor
     sh.getRange(5, col, 1, 2).merge()
       .setFontSize(22).setFontWeight('bold').setHorizontalAlignment('center').setBackground('#F3F4F6');
-    sh.getRange(5, col).setFormulaLocal(kpiFormulas[i]);
+    sh.getRange(5, col).setFormula(kpiFormulas[i]);
   });
   sh.getRange(5, 7).setNumberFormat('#,##0');
   sh.setRowHeight(4, 28); sh.setRowHeight(5, 56);
