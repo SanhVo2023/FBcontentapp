@@ -52,6 +52,17 @@ export type PostRow = {
   sheet_row_url: string | null;
   sheet_status: string | null;
   sheet_synced_at: string | null;
+  ads_enabled: boolean | null;
+  ads_name: string | null;
+  ads_objective: string | null;
+  ads_audience: string | null;
+  ads_audience_detail: string | null;
+  ads_placement: string | null;
+  ads_cta: string | null;
+  ads_landing_url: string | null;
+  ads_budget_per_day: number | null;
+  ads_duration_days: number | null;
+  ads_campaign_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -148,6 +159,17 @@ function toPostConfig(row: PostRow): PostConfig {
     sheet_row_url: row.sheet_row_url || undefined,
     sheet_status: row.sheet_status || undefined,
     sheet_synced_at: row.sheet_synced_at || undefined,
+    ads_enabled: row.ads_enabled || false,
+    ads_name: row.ads_name || undefined,
+    ads_objective: row.ads_objective || undefined,
+    ads_audience: row.ads_audience || undefined,
+    ads_audience_detail: row.ads_audience_detail || undefined,
+    ads_placement: row.ads_placement || undefined,
+    ads_cta: row.ads_cta || undefined,
+    ads_landing_url: row.ads_landing_url || undefined,
+    ads_budget_per_day: row.ads_budget_per_day ?? undefined,
+    ads_duration_days: row.ads_duration_days ?? undefined,
+    ads_campaign_id: row.ads_campaign_id || undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -391,6 +413,17 @@ export async function updatePost(postId: string, updates: Partial<PostConfig>): 
   if (updates.sheet_row_url !== undefined) dbUpdates.sheet_row_url = updates.sheet_row_url || null;
   if (updates.sheet_status !== undefined) dbUpdates.sheet_status = updates.sheet_status || null;
   if (updates.sheet_synced_at !== undefined) dbUpdates.sheet_synced_at = updates.sheet_synced_at || null;
+  if (updates.ads_enabled !== undefined) dbUpdates.ads_enabled = !!updates.ads_enabled;
+  if (updates.ads_name !== undefined) dbUpdates.ads_name = updates.ads_name || null;
+  if (updates.ads_objective !== undefined) dbUpdates.ads_objective = updates.ads_objective || null;
+  if (updates.ads_audience !== undefined) dbUpdates.ads_audience = updates.ads_audience || null;
+  if (updates.ads_audience_detail !== undefined) dbUpdates.ads_audience_detail = updates.ads_audience_detail || null;
+  if (updates.ads_placement !== undefined) dbUpdates.ads_placement = updates.ads_placement || null;
+  if (updates.ads_cta !== undefined) dbUpdates.ads_cta = updates.ads_cta || null;
+  if (updates.ads_landing_url !== undefined) dbUpdates.ads_landing_url = updates.ads_landing_url || null;
+  if (updates.ads_budget_per_day !== undefined) dbUpdates.ads_budget_per_day = updates.ads_budget_per_day ?? null;
+  if (updates.ads_duration_days !== undefined) dbUpdates.ads_duration_days = updates.ads_duration_days ?? null;
+  if (updates.ads_campaign_id !== undefined) dbUpdates.ads_campaign_id = updates.ads_campaign_id || null;
 
   const { data, error } = await supabase
     .from("posts")

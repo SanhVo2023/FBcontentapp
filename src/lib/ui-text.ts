@@ -251,6 +251,20 @@ export const T = {
   sheet_not_synced: "Chưa đẩy lên Sheet",
   sheet_sync_error: "Lỗi đồng bộ Sheet",
 
+  // ── Ads ──
+  ads_campaign: "Quảng cáo",
+  ads_enabled: "Bật quảng cáo",
+  ads_name: "Tên chiến dịch",
+  ads_objective: "Mục tiêu",
+  ads_audience: "Đối tượng",
+  ads_budget_per_day: "Ngân sách/ngày",
+  ads_duration: "Số ngày chạy",
+  ads_total_budget: "Tổng ngân sách",
+  ads_landing_url: "Landing URL",
+  ads_cta: "CTA quảng cáo",
+  verify_text: "Duyệt Text",
+  verify_image: "Duyệt Hình",
+
   // ── Filters ──
   sort_by: "Sắp xếp",
   advanced_filters: "Bộ lọc nâng cao",

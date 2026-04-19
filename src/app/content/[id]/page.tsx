@@ -60,6 +60,16 @@ export default function PostDetailPage() {
   const [useModel, setUseModel] = useState("");
   const [style, setStyle] = useState("professional");
 
+  // Ads fields
+  const [adsEnabled, setAdsEnabled] = useState(false);
+  const [adsName, setAdsName] = useState("");
+  const [adsObjective, setAdsObjective] = useState("Awareness");
+  const [adsAudience, setAdsAudience] = useState("");
+  const [adsCta, setAdsCta] = useState("Liên hệ");
+  const [adsLandingUrl, setAdsLandingUrl] = useState("");
+  const [adsBudgetPerDay, setAdsBudgetPerDay] = useState<number>(0);
+  const [adsDurationDays, setAdsDurationDays] = useState<number>(7);
+
   // UI state
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [editingCaption, setEditingCaption] = useState(false);
@@ -87,6 +97,14 @@ export default function PostDetailPage() {
         setServiceArea(p.service_area || ""); setScheduledDate(p.scheduled_date || "");
         setPostType(p.type || "feed-square"); setLanguage((p.language || "both") as "vi" | "en" | "both");
         setTopic(p.topic || ""); setUseModel(p.use_model || ""); setStyle(p.style || "professional");
+        setAdsEnabled(!!p.ads_enabled);
+        setAdsName(p.ads_name || "");
+        setAdsObjective(p.ads_objective || "Awareness");
+        setAdsAudience(p.ads_audience || "");
+        setAdsCta(p.ads_cta || "Liên hệ");
+        setAdsLandingUrl(p.ads_landing_url || "");
+        setAdsBudgetPerDay(p.ads_budget_per_day || 0);
+        setAdsDurationDays(p.ads_duration_days || 7);
         // Default display language based on post.language
         if (p.language === "en") setDisplayLanguage("en");
         else setDisplayLanguage("vi");
@@ -146,11 +164,19 @@ export default function PostDetailPage() {
         title, caption_vi: captionVi, caption_en: captionEn, text_overlay: { headline, subline, cta },
         prompt, status, content_type: contentType || null, service_area: serviceArea || null,
         scheduled_date: scheduledDate || null, type: postType, language, topic, use_model: useModel || null, style,
+        ads_enabled: adsEnabled,
+        ads_name: adsName || null,
+        ads_objective: adsObjective || null,
+        ads_audience: adsAudience || null,
+        ads_cta: adsCta || null,
+        ads_landing_url: adsLandingUrl || null,
+        ads_budget_per_day: adsBudgetPerDay || null,
+        ads_duration_days: adsDurationDays || null,
       }});
       showMsg(T.saved);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setSaving(false); }
-  }, [postId, title, captionVi, captionEn, headline, subline, cta, prompt, status, contentType, serviceArea, scheduledDate, postType, language, topic, useModel, style]);
+  }, [postId, title, captionVi, captionEn, headline, subline, cta, prompt, status, contentType, serviceArea, scheduledDate, postType, language, topic, useModel, style, adsEnabled, adsName, adsObjective, adsAudience, adsCta, adsLandingUrl, adsBudgetPerDay, adsDurationDays]);
 
   // Auto-save on caption blur
   const handleCaptionBlur = async () => {
@@ -432,6 +458,44 @@ export default function PostDetailPage() {
                   <div>
                     <label className="text-[9px] text-gray-500 uppercase block mb-1">{T.schedule}</label>
                     <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
+                  </div>
+
+                  {/* Ads Campaign */}
+                  <div className={`border rounded-lg p-3 transition ${adsEnabled ? "bg-orange-500/5 border-orange-500/30" : "bg-gray-900/50 border-gray-800"}`}>
+                    <label className="flex items-center justify-between cursor-pointer mb-2">
+                      <span className="text-xs text-gray-300 font-medium flex items-center gap-1.5">🎯 Quảng cáo / Ads Campaign</span>
+                      <input type="checkbox" checked={adsEnabled} onChange={(e) => setAdsEnabled(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+                    </label>
+                    {adsEnabled && (
+                      <div className="space-y-2 mt-2 pt-2 border-t border-orange-500/20">
+                        <p className="text-[10px] text-orange-300/80">Khi gửi Sheet, bài này cũng được thêm vào sheet Ads_Campaigns.</p>
+                        <input value={adsName} onChange={(e) => setAdsName(e.target.value)} placeholder="Tên chiến dịch (tự động nếu bỏ trống)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <select value={adsObjective} onChange={(e) => setAdsObjective(e.target.value)} className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none">
+                            {["Awareness", "Traffic", "Engagement", "Leads", "Conversions", "App Installs", "Video Views"].map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                          <input value={adsCta} onChange={(e) => setAdsCta(e.target.value)} placeholder="CTA" className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                        </div>
+                        <input value={adsAudience} onChange={(e) => setAdsAudience(e.target.value)} placeholder="Đối tượng (VD: Nữ 25-45, TP.HCM)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+                        <input value={adsLandingUrl} onChange={(e) => setAdsLandingUrl(e.target.value)} placeholder="Landing URL" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-gray-500 block mb-0.5">Ngân sách/ngày (₫)</label>
+                            <input type="number" value={adsBudgetPerDay || ""} onChange={(e) => setAdsBudgetPerDay(Number(e.target.value) || 0)} placeholder="0" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-gray-500 block mb-0.5">Số ngày chạy</label>
+                            <input type="number" value={adsDurationDays || ""} onChange={(e) => setAdsDurationDays(Number(e.target.value) || 0)} placeholder="7" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                          </div>
+                        </div>
+                        {adsBudgetPerDay > 0 && adsDurationDays > 0 && (
+                          <div className="text-[10px] text-gray-400">Tổng ngân sách: <span className="text-orange-400 font-medium">{(adsBudgetPerDay * adsDurationDays).toLocaleString("vi-VN")}₫</span></div>
+                        )}
+                        {post?.ads_campaign_id && (
+                          <div className="text-[10px] text-green-400 bg-green-500/10 rounded px-2 py-1">✓ Đã tạo trong Sheet: {post.ads_campaign_id}</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Tags */}

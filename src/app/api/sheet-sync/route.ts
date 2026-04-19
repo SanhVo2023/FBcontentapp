@@ -68,6 +68,21 @@ export async function POST(req: NextRequest) {
       const lang = post.language === "en" ? "en" : "vi";
       const caption = lang === "en" ? (post.caption_en || post.caption_vi || "") : (post.caption_vi || post.caption_en || "");
 
+      // Build ads block if enabled
+      const adsBlock = post.ads_enabled ? {
+        enabled: true,
+        name: post.ads_name || post.title || `Ads - ${post.topic || post.id}`,
+        objective: post.ads_objective || "Awareness",
+        audience: post.ads_audience || "",
+        audience_detail: post.ads_audience_detail || "",
+        placement: post.ads_placement || "Feed",
+        cta: post.ads_cta || "Liên hệ",
+        landing_url: post.ads_landing_url || "",
+        budget_per_day: post.ads_budget_per_day || 0,
+        duration_days: post.ads_duration_days || 7,
+        start_date: post.scheduled_date || new Date().toISOString().slice(0, 10),
+      } : null;
+
       const result = await callGasPost({
         action: "create_post",
         data: {
@@ -83,7 +98,8 @@ export async function POST(req: NextRequest) {
           image_url,
           assignee: "Như Ý",
           needs_legal: post.legal_context ? "Yes" : "No",
-          will_run_ads: "No",
+          will_run_ads: post.ads_enabled ? "Yes" : "No",
+          ads: adsBlock,
         },
       });
 
@@ -98,9 +114,10 @@ export async function POST(req: NextRequest) {
         sheet_row_url: result.sheet_url,
         sheet_status: "Pending Hiển Approval",
         sheet_synced_at: new Date().toISOString(),
+        ads_campaign_id: result.ads?.campaign_id || undefined,
       });
 
-      return NextResponse.json({ ok: true, sheet_post_id: result.post_id, sheet_url: result.sheet_url });
+      return NextResponse.json({ ok: true, sheet_post_id: result.post_id, sheet_url: result.sheet_url, ads_campaign_id: result.ads?.campaign_id });
     }
 
     if (action === "bulk_pull") {

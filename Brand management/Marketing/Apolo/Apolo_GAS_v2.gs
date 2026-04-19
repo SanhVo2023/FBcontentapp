@@ -40,8 +40,10 @@ const SHEETS = {
 const POST_COLS = {
   POST_ID: 1, FANPAGE: 2, PLANNED_DATE: 3, CHANNEL: 4, FORMAT: 5,
   TOPIC: 6, CAPTION: 7, HASHTAGS: 8, IMAGE_URL: 9, ASSIGNEE: 10,
-  STATUS: 11, NEEDS_LEGAL: 12, LEGAL_REVIEWER: 13, LEGAL_APPR: 14,
-  CONTENT_APPR: 15, APPROVAL_NOTES: 16, WILL_RUN_ADS: 17,
+  STATUS: 11, NEEDS_LEGAL: 12, LEGAL_REVIEWER: 13,
+  VERIFY_TEXT: 14,    // renamed from LEGAL_APPR — 2-step approval step 1
+  VERIFY_IMAGE: 15,   // renamed from CONTENT_APPR — 2-step approval step 2
+  APPROVAL_NOTES: 16, WILL_RUN_ADS: 17,
   LINKED_CAMPAIGN: 18, PERF_NOTES: 19, APP_ID: 20, LAST_UPDATED: 21,
 };
 
@@ -141,8 +143,10 @@ function _buildPostsSheet(ss, sheetName, title, lang) {
   const headers = [
     'Post ID', 'Fanpage', 'Planned Date', 'Channel', 'Format',
     'Topic', 'Caption', 'Hashtags', 'Image/Video Link', 'Assignee',
-    'Status', 'Needs Legal Review', 'Legal Reviewer', 'Legal Approved (Hiển)',
-    'Content Approved (Hiển)', 'Approval Notes', 'Will Run Ads?',
+    'Status', 'Needs Legal Review', 'Legal Reviewer',
+    '✅ Duyệt Text (Hiển)',    // step 1: verify text content
+    '✅ Duyệt Hình (Hiển)',    // step 2: verify image
+    'Ghi chú duyệt', 'Chạy quảng cáo?',
     'Linked Campaign ID', 'Performance Notes', 'app_id (hidden)', 'Last Updated',
   ];
   sh.getRange(2, 1, 1, headers.length).setValues([headers])
@@ -275,21 +279,23 @@ function _buildDashboard(ss) {
   sh.getRange(2, 1).setValue('Last refresh:').setFontWeight('bold');
   sh.getRange(2, 2).setValue(new Date()).setNumberFormat('yyyy-MM-dd HH:mm');
 
-  // KPI cards row 4-5
-  const kpiLabels = ['📋 Pending Approvals', '📅 Next 7 Days', '🎯 Running Ads', '💰 Total Spend (₫)'];
+  // KPI cards: labels row 4, values row 5 — MERGE FIRST, THEN SET FORMULA on anchor
+  const kpiLabels = ['📋 Chờ duyệt', '📅 7 ngày tới', '🎯 Ads đang chạy', '💰 Tổng chi (₫)'];
+  const kpiFormulas = [
+    `=IFERROR(COUNTIF(Posts_VN!N3:N500,"Pending")+COUNTIF(Posts_VN!O3:O500,"Pending")+COUNTIF(Posts_EN!N3:N500,"Pending")+COUNTIF(Posts_EN!O3:O500,"Pending"),0)`,
+    `=IFERROR(COUNTIFS(Posts_VN!C3:C500,">="&TODAY(),Posts_VN!C3:C500,"<="&(TODAY()+7))+COUNTIFS(Posts_EN!C3:C500,">="&TODAY(),Posts_EN!C3:C500,"<="&(TODAY()+7)),0)`,
+    `=IFERROR(COUNTIF(Ads_Campaigns!R3:R300,"Running"),0)`,
+    `=IFERROR(SUMIFS(Ads_Campaigns!S3:S300,Ads_Campaigns!R3:R300,"Running"),0)`,
+  ];
   kpiLabels.forEach((lbl, i) => {
     const col = i * 2 + 1;
+    // Label row 4
     sh.getRange(4, col, 1, 2).merge().setValue(lbl)
       .setBackground('#D9E1F2').setFontWeight('bold').setHorizontalAlignment('center');
-  });
-  // KPI formulas row 5
-  sh.getRange(5, 1).setFormula(`=COUNTIF(Posts_VN!N3:N500,"Pending")+COUNTIF(Posts_VN!O3:O500,"Pending")+COUNTIF(Posts_EN!N3:N500,"Pending")+COUNTIF(Posts_EN!O3:O500,"Pending")`);
-  sh.getRange(5, 3).setFormula(`=COUNTIFS(Posts_VN!C3:C500,">="&TODAY(),Posts_VN!C3:C500,"<="&(TODAY()+7))+COUNTIFS(Posts_EN!C3:C500,">="&TODAY(),Posts_EN!C3:C500,"<="&(TODAY()+7))`);
-  sh.getRange(5, 5).setFormula(`=COUNTIF(Ads_Campaigns!R3:R300,"Running")`);
-  sh.getRange(5, 7).setFormula(`=SUMIFS(Ads_Campaigns!S3:S300,Ads_Campaigns!R3:R300,"Running")`);
-  sh.getRange(5, 1, 1, 8).merge = null;
-  [1, 3, 5, 7].forEach((col) => {
-    sh.getRange(5, col, 1, 2).merge().setFontSize(22).setFontWeight('bold').setHorizontalAlignment('center').setBackground('#F3F4F6');
+    // Value row 5 — merge first, then set formula on the merged anchor
+    sh.getRange(5, col, 1, 2).merge()
+      .setFontSize(22).setFontWeight('bold').setHorizontalAlignment('center').setBackground('#F3F4F6');
+    sh.getRange(5, col).setFormula(kpiFormulas[i]);
   });
   sh.getRange(5, 7).setNumberFormat('#,##0');
   sh.setRowHeight(4, 28); sh.setRowHeight(5, 56);
@@ -343,18 +349,17 @@ function onEdit(e) {
 
   if (name === SHEETS.VN || name === SHEETS.EN) {
     sh.getRange(row, POST_COLS.LAST_UPDATED).setValue(new Date());
-    const legal = sh.getRange(row, POST_COLS.LEGAL_APPR).getValue();
-    const cont  = sh.getRange(row, POST_COLS.CONTENT_APPR).getValue();
-    const needsLegal = sh.getRange(row, POST_COLS.NEEDS_LEGAL).getValue();
+    // 2-step approval: both Verify Text AND Verify Image must be Approved
+    const verifyText  = sh.getRange(row, POST_COLS.VERIFY_TEXT).getValue();
+    const verifyImage = sh.getRange(row, POST_COLS.VERIFY_IMAGE).getValue();
     const status = sh.getRange(row, POST_COLS.STATUS).getValue();
-    const legalOK = (needsLegal !== 'Yes') || legal === 'Approved';
-    if (legalOK && cont === 'Approved' && status !== 'Published' && status !== 'Scheduled') {
+    if (verifyText === 'Approved' && verifyImage === 'Approved' && status !== 'Published' && status !== 'Scheduled') {
       sh.getRange(row, POST_COLS.STATUS).setValue('Approved');
     }
-    if (legal === 'Rejected' || cont === 'Rejected') {
+    if (verifyText === 'Rejected' || verifyImage === 'Rejected') {
       sh.getRange(row, POST_COLS.STATUS).setValue('Rejected');
     }
-    if (legal === 'Revise' || cont === 'Revise') {
+    if (verifyText === 'Revise' || verifyImage === 'Revise') {
       sh.getRange(row, POST_COLS.STATUS).setValue('Revise');
     }
   }
@@ -462,10 +467,11 @@ function collectPendingApprovals() {
     const data = sh.getRange(3, 1, 500, 21).getValues();
     data.forEach(r => {
       if (!r[0]) return;
-      const legalPend   = r[11] === 'Yes' && r[13] === 'Pending';
-      const contentPend = r[14] === 'Pending';
-      if (legalPend)   rows.push([`Post ${name.slice(-2)}`, r[0], r[1], r[5], 'Legal Approval',   r[9], r[2]]);
-      if (contentPend) rows.push([`Post ${name.slice(-2)}`, r[0], r[1], r[5], 'Content Approval', r[9], r[2]]);
+      // 2-step: r[13] = Verify Text (col N), r[14] = Verify Image (col O)
+      const textPend  = r[13] === 'Pending';
+      const imagePend = r[14] === 'Pending';
+      if (textPend)  rows.push([`Post ${name.slice(-2)}`, r[0], r[1], r[5], 'Duyệt Text',  r[9], r[2]]);
+      if (imagePend) rows.push([`Post ${name.slice(-2)}`, r[0], r[1], r[5], 'Duyệt Hình',  r[9], r[2]]);
     });
   });
 
@@ -648,6 +654,9 @@ function doPost(e) {
     if (body.action === 'create_post') {
       return _jsonResponse(_createPostRow(body.data));
     }
+    if (body.action === 'create_ads') {
+      return _jsonResponse(_createAdsRow(body.data));
+    }
     if (body.action === 'get_status') {
       return _jsonResponse(_getPostStatus(body.data && body.data.app_id));
     }
@@ -717,14 +726,90 @@ function _createPostRow(data) {
   sh.getRange(r, POST_COLS.ASSIGNEE).setValue(data.assignee || 'Như Ý');
   sh.getRange(r, POST_COLS.STATUS).setValue('Pending Hiển Approval');
   sh.getRange(r, POST_COLS.NEEDS_LEGAL).setValue(data.needs_legal || 'No');
-  sh.getRange(r, POST_COLS.LEGAL_APPR).setValue('Pending');
-  sh.getRange(r, POST_COLS.CONTENT_APPR).setValue('Pending');
+  sh.getRange(r, POST_COLS.VERIFY_TEXT).setValue('Pending');
+  sh.getRange(r, POST_COLS.VERIFY_IMAGE).setValue('Pending');
   sh.getRange(r, POST_COLS.WILL_RUN_ADS).setValue(data.will_run_ads || 'No');
   sh.getRange(r, POST_COLS.APP_ID).setValue(data.app_id);
   sh.getRange(r, POST_COLS.LAST_UPDATED).setValue(new Date());
 
   const sheetUrl = `${ss.getUrl()}#gid=${sh.getSheetId()}&range=A${r}`;
-  return { ok: true, post_id: postId, row: r, sheet_url: sheetUrl };
+
+  // If this post has ads config, also create an Ads_Campaigns row linked by Post ID
+  let ads_result = null;
+  if (data.ads && data.ads.enabled) {
+    sh.getRange(r, POST_COLS.WILL_RUN_ADS).setValue('Yes');
+    ads_result = _createAdsRow({
+      app_id: data.app_id,
+      linked_post_id: postId,
+      fanpage: data.fanpage,
+      name: data.ads.name || `Ads - ${data.topic || postId}`,
+      objective: data.ads.objective || 'Awareness',
+      audience: data.ads.audience || '',
+      audience_detail: data.ads.audience_detail || '',
+      goal: data.ads.goal || '',
+      placement: data.ads.placement || 'Feed',
+      cta: data.ads.cta || 'Liên hệ',
+      landing_url: data.ads.landing_url || '',
+      budget_per_day: data.ads.budget_per_day || 0,
+      start_date: data.ads.start_date || data.planned_date,
+      duration_days: data.ads.duration_days || 7,
+      assignee: data.assignee || 'Như Ý',
+    });
+    // Back-link the ads campaign ID into the post row
+    if (ads_result && ads_result.campaign_id) {
+      sh.getRange(r, POST_COLS.LINKED_CAMPAIGN).setValue(ads_result.campaign_id);
+    }
+  }
+
+  return { ok: true, post_id: postId, row: r, sheet_url: sheetUrl, ads: ads_result };
+}
+
+/**
+ * Insert a new row into Ads_Campaigns.
+ * Returns { ok, campaign_id, row, sheet_url }
+ */
+function _createAdsRow(data) {
+  if (!data) return { ok: false, error: 'Missing data' };
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(SHEETS.ADS);
+  if (!sh) return { ok: false, error: 'Ads_Campaigns sheet not found. Run "Build sheet from scratch" first.' };
+
+  const lastRow = sh.getLastRow();
+  let r = 3;
+  for (let i = 3; i <= lastRow + 1; i++) {
+    if (!sh.getRange(i, 1).getValue()) { r = i; break; }
+  }
+
+  const campaignId = nextId(SHEETS.ADS, 'CMP', 1);
+  const startDate = data.start_date ? new Date(data.start_date) : new Date();
+  const budget = Number(data.budget_per_day) || 0;
+  const duration = Number(data.duration_days) || 7;
+
+  // Columns: A=Campaign ID, B=Fanpage, C=Linked Post ID, D=Name, E=Objective,
+  // F=Audience, G=Audience Detail, H=Goal, I=Placement, J=CTA, K=Landing URL,
+  // L=Budget/day, M=Start Date, N=Duration, O=Total Budget (auto), P=Ads Approval,
+  // Q=Assignee, R=Status, S=Spend, T=Reach, U=Impressions, V=Clicks, W=Leads, X=CPL/CTR
+  sh.getRange(r, 1).setValue(campaignId);
+  sh.getRange(r, 2).setValue(data.fanpage || '');
+  sh.getRange(r, 3).setValue(data.linked_post_id || '');
+  sh.getRange(r, 4).setValue(data.name || '');
+  sh.getRange(r, 5).setValue(data.objective || 'Awareness');
+  sh.getRange(r, 6).setValue(data.audience || '');
+  sh.getRange(r, 7).setValue(data.audience_detail || '');
+  sh.getRange(r, 8).setValue(data.goal || '');
+  sh.getRange(r, 9).setValue(data.placement || 'Feed');
+  sh.getRange(r, 10).setValue(data.cta || 'Liên hệ');
+  sh.getRange(r, 11).setValue(data.landing_url || '');
+  sh.getRange(r, 12).setValue(budget);
+  sh.getRange(r, 13).setValue(startDate);
+  sh.getRange(r, 14).setValue(duration);
+  sh.getRange(r, 15).setValue(budget * duration); // Total budget
+  sh.getRange(r, 16).setValue('Pending'); // Ads approval
+  sh.getRange(r, 17).setValue(data.assignee || 'Như Ý');
+  sh.getRange(r, 18).setValue('Draft');
+
+  const sheetUrl = `${ss.getUrl()}#gid=${sh.getSheetId()}&range=A${r}`;
+  return { ok: true, campaign_id: campaignId, row: r, sheet_url: sheetUrl };
 }
 
 /**
@@ -746,8 +831,11 @@ function _getPostStatus(appId) {
           found: true,
           post_id: row[POST_COLS.POST_ID - 1],
           status: row[POST_COLS.STATUS - 1] || '',
-          legal_approved: row[POST_COLS.LEGAL_APPR - 1] || '',
-          content_approved: row[POST_COLS.CONTENT_APPR - 1] || '',
+          verify_text: row[POST_COLS.VERIFY_TEXT - 1] || '',
+          verify_image: row[POST_COLS.VERIFY_IMAGE - 1] || '',
+          // Legacy aliases for backward compat with existing app code
+          legal_approved: row[POST_COLS.VERIFY_TEXT - 1] || '',
+          content_approved: row[POST_COLS.VERIFY_IMAGE - 1] || '',
           approval_notes: row[POST_COLS.APPROVAL_NOTES - 1] || '',
           sheet_name: name,
           row: 3 + i,

@@ -109,6 +109,19 @@ export type PostConfig = {
   sheet_status?: string;        // latest pulled status from sheet
   sheet_synced_at?: string;     // ISO timestamp of last sync
 
+  // Ads campaign (optional — post doubles as an ads campaign)
+  ads_enabled?: boolean;
+  ads_name?: string;
+  ads_objective?: string;       // Awareness | Traffic | Leads | Conversions | ...
+  ads_audience?: string;
+  ads_audience_detail?: string;
+  ads_placement?: string;       // Feed | Stories | Reels | ...
+  ads_cta?: string;
+  ads_landing_url?: string;
+  ads_budget_per_day?: number;
+  ads_duration_days?: number;
+  ads_campaign_id?: string;     // CMP-### from sheet after push
+
   // Legacy compat
   result_url?: string;
   drive_url?: string;
