@@ -21,6 +21,7 @@ type BrandRow = {
   target_audience: string;
   models: Array<{ id: string; name: string; photo: string; description: string }>;
   references: Array<{ id: string; path: string; description: string }>;
+  sample_posts: Array<{ id: string; label: string; text: string }> | null;
   created_at: string;
   updated_at: string;
 };
@@ -116,6 +117,7 @@ function toBrandConfig(row: BrandRow): BrandConfig {
     target_audience: row.target_audience || "",
     models: row.models || [],
     references: row.references || [],
+    sample_posts: row.sample_posts || [],
   };
 }
 
@@ -210,6 +212,7 @@ export async function saveBrand(brand: BrandConfig): Promise<void> {
         target_audience: brand.target_audience,
         models: brand.models,
         references: brand.references,
+        sample_posts: brand.sample_posts || [],
       },
       { onConflict: "brand_id" }
     );

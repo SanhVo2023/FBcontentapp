@@ -26,6 +26,8 @@ export const FB_STYLES = [
 
 export type LogoVariant = { id: string; url: string; label: string };
 
+export type SamplePost = { id: string; label: string; text: string };
+
 export type BrandConfig = {
   brand_id: string;
   brand_name: string;
@@ -38,10 +40,26 @@ export type BrandConfig = {
   font_style: string;
   models: Array<{ id: string; name: string; photo: string; description: string }>;
   references: Array<{ id: string; path: string; description: string }>;
+  sample_posts: SamplePost[];
   tone: string;
   industry: string;
   target_audience: string;
 };
+
+export const TONE_PRESETS = [
+  { value: "professional", label: "Chuyên nghiệp & uy tín", desc: "Professional & authoritative" },
+  { value: "friendly", label: "Thân thiện & gần gũi", desc: "Friendly & conversational" },
+  { value: "urgent", label: "Khẩn cấp & thúc đẩy", desc: "Urgent & promotional" },
+  { value: "educational", label: "Giáo dục & thông tin", desc: "Educational & informative" },
+  { value: "empathetic", label: "Thấu cảm & động viên", desc: "Empathetic & supportive" },
+  { value: "custom", label: "Tùy chỉnh", desc: "Custom tone text" },
+];
+
+export function getTonePrompt(tone: string, customText?: string): string {
+  if (tone === "custom") return customText || "";
+  const preset = TONE_PRESETS.find((t) => t.value === tone);
+  return preset ? `${preset.label} (${preset.desc})` : tone;
+}
 
 export type ContentType = "educational" | "authority" | "promotional" | "engagement";
 

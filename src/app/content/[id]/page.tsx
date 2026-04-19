@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { CONTENT_TYPES, POST_STATUSES, SERVICE_AREAS, FB_POST_TYPES } from "@/lib/fb-specs";
 import BrandImage from "@/components/BrandImage";
 import FacebookPreview from "@/components/content/FacebookPreview";
+import CaptionToolbar from "@/components/content/CaptionToolbar";
+import AIComposerPanel from "@/components/content/AIComposerPanel";
 import { T } from "@/lib/ui-text";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
@@ -65,6 +67,10 @@ export default function PostDetailPage() {
 
   // Sheet sync
   const [sheetBusy, setSheetBusy] = useState<"push" | "pull" | null>(null);
+
+  // Refs for caption textareas (for toolbar caret insertion)
+  const viTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const enTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const backBrand = searchParams.get("brand") || post?.brand_id || "";
   const backUrl = backBrand ? `/content?brand=${backBrand}` : "/content";
@@ -136,6 +142,21 @@ export default function PostDetailPage() {
     setGeneratingImages(false);
     showMsg("Images generated");
   }, [brand, selectedVariants, prompt, headline, subline, cta, postId, title, style, useModel]);
+
+  const handleComposed = (result: { caption_vi?: string; caption_en?: string; headline: string; subline: string; cta: string; hashtags: string }) => {
+    if (result.caption_vi !== undefined) {
+      const final = result.hashtags && !result.caption_vi.includes("#") ? `${result.caption_vi}\n\n${result.hashtags}` : result.caption_vi;
+      setCaptionVi(final);
+    }
+    if (result.caption_en !== undefined) {
+      const final = result.hashtags && !result.caption_en.includes("#") ? `${result.caption_en}\n\n${result.hashtags}` : result.caption_en;
+      setCaptionEn(final);
+    }
+    if (result.headline) setHeadline(result.headline);
+    if (result.subline) setSubline(result.subline);
+    if (result.cta) setCta(result.cta);
+    showMsg("✨ Đã soạn");
+  };
 
   const handlePushToSheet = async () => {
     setSheetBusy("push"); setError(null);
@@ -234,17 +255,31 @@ export default function PostDetailPage() {
             {/* ── CONTENT TAB ── */}
             {tab === "content" && (
               <div className="space-y-4">
+                {/* AI Composer */}
+                <AIComposerPanel
+                  brand={brand}
+                  language={language as "vi" | "en" | "both"}
+                  topic={topic || title}
+                  onComposed={handleComposed}
+                />
+
                 {/* Captions */}
                 <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
-                  <h3 className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Captions</h3>
-                  <div>
-                    <div className="flex justify-between mb-1"><label className="text-[9px] text-gray-500 uppercase">Vietnamese</label><span className="text-[9px] text-gray-600">{captionVi.length}</span></div>
-                    <textarea value={captionVi} onChange={(e) => setCaptionVi(e.target.value)} rows={6} placeholder="Nhập caption tiếng Việt..." className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-y outline-none focus:border-blue-500/50 leading-relaxed" />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-1"><label className="text-[9px] text-gray-500 uppercase">English</label><span className="text-[9px] text-gray-600">{captionEn.length}</span></div>
-                    <textarea value={captionEn} onChange={(e) => setCaptionEn(e.target.value)} rows={4} placeholder="English caption..." className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-y outline-none focus:border-blue-500/50 leading-relaxed" />
-                  </div>
+                  <h3 className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{T.captions}</h3>
+                  {(language === "vi" || language === "both") && (
+                    <div>
+                      <div className="flex justify-between mb-1"><label className="text-[9px] text-gray-500 uppercase">{T.caption_vi}</label><span className="text-[9px] text-gray-600">{captionVi.length}</span></div>
+                      <CaptionToolbar value={captionVi} onChange={setCaptionVi} textareaRef={viTextareaRef} brand={brand} language="vi" />
+                      <textarea ref={viTextareaRef} value={captionVi} onChange={(e) => setCaptionVi(e.target.value)} rows={10} placeholder="Nhập caption tiếng Việt..." className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-y outline-none focus:border-blue-500/50 leading-relaxed font-mono" />
+                    </div>
+                  )}
+                  {(language === "en" || language === "both") && (
+                    <div>
+                      <div className="flex justify-between mb-1"><label className="text-[9px] text-gray-500 uppercase">{T.caption_en}</label><span className="text-[9px] text-gray-600">{captionEn.length}</span></div>
+                      <CaptionToolbar value={captionEn} onChange={setCaptionEn} textareaRef={enTextareaRef} brand={brand} language="en" />
+                      <textarea ref={enTextareaRef} value={captionEn} onChange={(e) => setCaptionEn(e.target.value)} rows={6} placeholder="English caption..." className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-y outline-none focus:border-blue-500/50 leading-relaxed font-mono" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Banner Text */}

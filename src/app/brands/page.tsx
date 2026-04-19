@@ -18,7 +18,7 @@ async function api(url: string, body?: unknown) {
 const EMPTY_BRAND: BrandConfig = {
   brand_id: "", brand_name: "", tagline: "", logo: "", logos: [],
   color_primary: "#1a1a2e", color_secondary: "#c5a55a", color_accent: "#ffffff",
-  font_style: "", models: [], references: [],
+  font_style: "", models: [], references: [], sample_posts: [],
   tone: "", industry: "", target_audience: "",
 };
 
@@ -315,6 +315,27 @@ export default function BrandsPage() {
                       <button onClick={() => setEditing({ ...editing, references: editing.references.filter((_, j) => j !== i) })} className="absolute top-1 right-1 w-5 h-5 bg-red-600/80 text-white rounded-full flex items-center justify-center text-[9px] opacity-0 group-hover:opacity-100 transition">x</button>
                     </div>
                   ))}
+                </div>
+              </section>
+
+              {/* Sample posts */}
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Type size={14} /> {T.brand_sample_posts} ({editing.sample_posts?.length || 0})</div>
+                  <button onClick={() => setEditing({ ...editing, sample_posts: [...(editing.sample_posts || []), { id: `sample-${Date.now()}`, label: "", text: "" }] })} className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"><Plus size={10} /> {T.add_sample_post}</button>
+                </div>
+                <p className="text-[10px] text-gray-600">Dán nội dung bài FB thật để AI Composer học cách viết (cấu trúc, emoji, khối liên hệ).</p>
+                <div className="space-y-2">
+                  {(editing.sample_posts || []).map((s, i) => (
+                    <div key={s.id} className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-2 group hover:border-gray-700 transition">
+                      <div className="flex items-center gap-2">
+                        <input value={s.label} onChange={(e) => { const samples = [...(editing.sample_posts || [])]; samples[i] = { ...s, label: e.target.value }; setEditing({ ...editing, sample_posts: samples }); }} placeholder={T.sample_label_placeholder} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-purple-500/30 outline-none" />
+                        <button onClick={() => setEditing({ ...editing, sample_posts: (editing.sample_posts || []).filter((_, j) => j !== i) })} className="text-gray-600 hover:text-red-400 transition p-1"><Trash2 size={12} /></button>
+                      </div>
+                      <textarea value={s.text} onChange={(e) => { const samples = [...(editing.sample_posts || [])]; samples[i] = { ...s, text: e.target.value }; setEditing({ ...editing, sample_posts: samples }); }} rows={5} placeholder={T.sample_text_placeholder} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] text-gray-300 font-mono resize-y outline-none focus:border-purple-500/50 leading-relaxed" />
+                    </div>
+                  ))}
+                  {(editing.sample_posts?.length || 0) === 0 && <p className="text-xs text-gray-600 text-center py-3">Chưa có bài mẫu. Thêm 1-2 bài để AI Composer bắt chước phong cách.</p>}
                 </div>
               </section>
 

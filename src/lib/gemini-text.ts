@@ -334,6 +334,81 @@ Generate exactly ${variantCount} variants. Each MUST use a different post_type f
   return JSON.parse(text);
 }
 
+export type ComposePostInput = {
+  tone: string;
+  angle: string;
+  samples: string[];
+  facts: string;
+  topic?: string;
+  language: "vi" | "en" | "both";
+};
+
+export type ComposePostOutput = {
+  caption_vi?: string;
+  caption_en?: string;
+  headline: string;
+  subline: string;
+  cta: string;
+  hashtags: string;
+};
+
+export async function composePost(
+  brand: BrandConfig,
+  input: ComposePostInput
+): Promise<ComposePostOutput> {
+  const langInst = input.language === "both"
+    ? "Write BOTH Vietnamese and English captions."
+    : input.language === "vi" ? "Write Vietnamese caption only."
+    : "Write English caption only.";
+
+  const samplesBlock = input.samples.filter((s) => s && s.trim()).length
+    ? input.samples
+        .filter((s) => s && s.trim())
+        .map((s, i) => `--- SAMPLE ${i + 1} ---\n${s.trim()}`)
+        .join("\n\n")
+    : "(no samples provided — use the Vietnamese FB writing style guide)";
+
+  const result = await heavy.generateContent(`You are a senior Facebook content writer for a Vietnamese law firm.
+
+${brandContext(brand)}
+${viStyleBlock(input.language)}
+
+## TONE OF VOICE
+${input.tone}
+
+## CONTENT ANGLE
+${input.angle} (educational | authority | promotional | engagement)
+
+## STYLE REFERENCE — mirror the STRUCTURE, formatting, emoji usage, line breaks, and contact block layout of these sample posts. Do NOT copy specific text; only copy the style.
+${samplesBlock}
+
+## FACTS & DATA TO INCORPORATE
+${input.facts}
+
+${input.topic ? `## TOPIC\n${input.topic}\n` : ""}
+
+## TASK
+Write a brand-new Facebook post. ${langInst}
+- Use the FACTS — every important fact must appear naturally
+- Match the TONE
+- Serve the ANGLE
+- Mirror the STRUCTURE of the samples (emoji bullets, checkmark lists, numbered steps, divider lines, contact block, hashtags at end)
+- Keep headline under 8 words, subline under 15 words, CTA under 4 words
+
+Return ONLY JSON (no markdown, no explanation):
+{
+  ${input.language !== "en" ? `"caption_vi": "Full Vietnamese Facebook caption with emoji/bullets/contact block/hashtags",` : ""}
+  ${input.language !== "vi" ? `"caption_en": "Full English Facebook caption",` : ""}
+  "headline": "BANNER HEADLINE",
+  "subline": "Supporting subline",
+  "cta": "CTA text",
+  "hashtags": "#tag1 #tag2 #tag3"
+}`);
+
+  const text = result.response.text().replace(/```json\n?/g, "").replace(/```/g, "").trim();
+  return JSON.parse(text);
+}
+
 export async function generateMonthContent(brand: BrandConfig, year: number, month: number) {
   // Get all Mondays of the month
   const weeks: string[] = [];
