@@ -3,6 +3,11 @@ import { getClientSessionBrandId } from "@/lib/client-auth";
 import { getPosts, getPost, updatePost, getPostThumbnails, getPostCommentCounts } from "@/lib/db";
 import type { ClientVerifyState, PostConfig } from "@/lib/fb-specs";
 
+// Client can only see posts the creator has explicitly sent for approval,
+// plus already-approved/published ones (historical view). Drafts stay hidden
+// because work-in-progress shouldn't leak to the client.
+const CLIENT_VISIBLE_STATUSES = new Set(["submitted", "approved", "published"]);
+
 function deriveAppStatusFromClient(
   post: PostConfig,
   verifyText: ClientVerifyState,
@@ -32,12 +37,14 @@ export async function GET(req: NextRequest) {
     const id = req.nextUrl.searchParams.get("id");
     if (id) {
       const post = await getPost(id);
-      if (!post || post.brand_id !== brandId) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (!post || post.brand_id !== brandId || !CLIENT_VISIBLE_STATUSES.has(post.status)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       return NextResponse.json(post);
     }
 
     const { posts } = await getPosts({ brandId });
-    const visible = posts.filter((p) => p.status !== "trashed");
+    const visible = posts.filter((p) => CLIENT_VISIBLE_STATUSES.has(p.status));
     const ids = visible.map((p) => p.id);
     const thumbs = await getPostThumbnails(ids).catch(() => ({} as Record<string, string>));
     const commentCounts = await getPostCommentCounts(ids).catch(() => ({} as Record<string, number>));
