@@ -28,14 +28,7 @@ export default function BrandsPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [showImport, setShowImport] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
-
-  const handleCopyBrandPrompt = () => {
-    navigator.clipboard.writeText(generateBrandConfigPrompt());
-    setPromptCopied(true);
-    setTimeout(() => setPromptCopied(false), 2000);
-  };
 
   useEffect(() => { api("/api/brands").then((b: BrandConfig[]) => setBrands(Array.isArray(b) ? b : [])); }, []);
 
@@ -99,9 +92,6 @@ export default function BrandsPage() {
       <div className="border-b border-gray-800 px-4 py-2.5 flex items-center gap-3 shrink-0">
         <h1 className="text-base font-bold">{T.brands_title}</h1>
         <div className="ml-auto flex gap-2">
-          <button onClick={handleCopyBrandPrompt} className="px-3 py-1.5 bg-purple-600/20 text-purple-400 text-xs rounded-lg hover:bg-purple-600/30 border border-purple-500/30">
-            {promptCopied ? T.copied : T.ai_prompt}
-          </button>
           <button onClick={() => setShowImport(true)} className="px-3 py-1.5 bg-green-600/20 text-green-400 text-xs rounded-lg hover:bg-green-600/30">{T.import_json}</button>
           <button onClick={handleNew} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium rounded-lg flex items-center gap-1"><Plus size={12} /> {T.create}</button>
         </div>
@@ -384,7 +374,7 @@ export default function BrandsPage() {
       {showImport && (
         <ImportJsonModal
           title="Import Brand JSON"
-          description="Paste a brand configuration JSON from an AI agent."
+          description="Paste a brand configuration JSON from an AI agent. Click Copy AI Prompt for the correct schema."
           placeholder='{"brand_id": "my-brand", "brand_name": "My Brand", ...}'
           validate={(data) => {
             const d = data as Record<string, unknown>;
@@ -393,6 +383,7 @@ export default function BrandsPage() {
           }}
           onImport={(data) => { setEditing({ ...EMPTY_BRAND, ...(data as BrandConfig) }); setShowImport(false); }}
           onClose={() => setShowImport(false)}
+          copyPrompt={generateBrandConfigPrompt()}
         />
       )}
     </div>

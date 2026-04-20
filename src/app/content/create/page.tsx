@@ -6,6 +6,7 @@ import { FileJson, X } from "lucide-react";
 import type { BrandConfig } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
 import PostGeneratorForm, { type GenResult, type GenMeta } from "@/components/content/PostGeneratorForm";
+import { generatePostBulkPrompt } from "@/lib/prompt-templates";
 import { T } from "@/lib/ui-text";
 
 async function api(url: string, body?: unknown) {
@@ -115,14 +116,15 @@ export default function CreatePostPage() {
         </div>
       </div>
 
-      {showJson && (
+      {showJson && brand && (
         <ImportJsonModal
-          title="Nhập từ JSON"
-          description="Dán mảng JSON. Bắt buộc: title. Tùy chọn: topic, caption_vi, caption_en, content_type, service_area, scheduled_date, language, type."
-          placeholder='[\n  { "title": "Ly hôn đơn phương", "topic": "Ly hôn", "content_type": "educational" }\n]'
+          title="Nhập nhiều bài từ JSON"
+          description="Dán mảng JSON các bài đăng. Dùng Copy AI Prompt để lấy prompt đúng schema."
+          placeholder='[\n  { "title": "Ly hôn đơn phương", "topic": "Ly hôn", "content_type": "educational", "language": "both", "type": "feed-square", "status": "draft" }\n]'
           onImport={(data) => { setShowJson(false); handleJsonImport(data); }}
           onClose={() => setShowJson(false)}
           validate={(data) => Array.isArray(data) ? null : "Phải là một mảng JSON"}
+          copyPrompt={generatePostBulkPrompt(brand, 10)}
         />
       )}
     </div>

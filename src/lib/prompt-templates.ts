@@ -84,7 +84,7 @@ Return ONLY a JSON array. Each item must follow this exact schema:
 }
 
 export function generateBrandConfigPrompt(): string {
-  return `Create a brand configuration JSON for a Facebook banner generator app.
+  return `Create a brand configuration JSON for the Apolo Content Studio app.
 
 ## OUTPUT FORMAT
 Return ONLY a JSON object with this exact schema:
@@ -94,6 +94,7 @@ Return ONLY a JSON object with this exact schema:
   "brand_name": "Full Brand Name",
   "tagline": "Brand tagline or slogan",
   "logo": "",
+  "logos": [],
   "color_primary": "#hex",
   "color_secondary": "#hex",
   "color_accent": "#hex",
@@ -102,19 +103,100 @@ Return ONLY a JSON object with this exact schema:
   "industry": "Industry description",
   "target_audience": "Who the brand serves",
   "models": [],
-  "references": []
+  "references": [],
+  "sample_posts": [],
+  "client_password": ""
 }
 \`\`\`
 
 ## FIELD RULES
-- **brand_id**: unique, lowercase, kebab-case
-- **colors**: valid hex colors. Primary = main brand color, Secondary = accent, Accent = text/contrast
-- **font_style**: describe the typography feel (e.g., "Modern sans-serif, clean and minimal")
-- **tone**: comma-separated personality traits (e.g., "Professional, trustworthy, modern")
-- **logo**: leave empty — will be uploaded separately
-- **models/references**: leave as empty arrays — will be added via the app
+- **brand_id** (required): unique, lowercase, kebab-case (e.g., "apolo-lawyers")
+- **brand_name** (required): public display name
+- **tagline**: short slogan (under 60 chars)
+- **logo**: leave as empty string — uploaded via the Brands page
+- **logos**: array of extra logo variants \`[{ "id": "slug", "url": "", "label": "White on dark" }]\`. Leave empty — uploaded later.
+- **color_primary / color_secondary / color_accent**: valid hex colors. Primary = dominant brand color, Secondary = supporting tone, Accent = attention-grabbing highlight
+- **font_style**: typography feel (e.g., "Elegant serif headlines, clean sans-serif body")
+- **tone**: comma-separated personality traits (e.g., "Authoritative, trustworthy, premium")
+- **industry**: one-line industry description
+- **target_audience**: who the brand serves (demographic + psychographic)
+- **models**: array of real people for banners \`[{ "id": "slug", "name": "Full Name", "photo": "", "description": "Role/identifier" }]\`. Leave empty — photos uploaded via the Brands page.
+- **references**: array of style-reference images \`[{ "id": "slug", "path": "", "description": "What this looks like" }]\`. Leave empty — uploaded later.
+- **sample_posts**: array of reference Facebook posts that show the brand's voice \`[{ "id": "slug", "label": "Short label", "text": "Full post text including emoji, line breaks, contact block, hashtags" }]\`. Use for AI style-matching during post generation. Include 2–4 representative samples if you have them.
+- **client_password**: optional. If set, the brand's client can log in at \`/client\` with this password to review/approve posts. Leave empty for creator-only brands.
 
 Return ONLY the JSON, no explanation.`;
+}
+
+export function generatePostBulkPrompt(brand: BrandConfig, count = 10): string {
+  return `You are a Facebook content strategist generating ${count} posts for the brand below. Output will be imported into Apolo Content Studio via bulk-post JSON import.
+
+## BRAND
+- Name: ${brand.brand_name} (${brand.tagline})
+- Industry: ${brand.industry}
+- Tone: ${brand.tone}
+- Audience: ${brand.target_audience}
+- Colors: ${brand.color_primary} / ${brand.color_secondary} / ${brand.color_accent}
+- Font style: ${brand.font_style}
+${brand.models?.length ? `- Available models (use the \`id\` in use_model): ${brand.models.map((m) => `"${m.id}" (${m.name} — ${m.description})`).join(", ")}` : "- No model photos available — use_model: null"}
+${brand.references?.length ? `- Available references (use the \`id\` in use_reference): ${brand.references.map((r) => `"${r.id}" (${r.description})`).join(", ")}` : "- No reference images — use_reference: null"}
+${brand.sample_posts?.length ? `\n## STYLE REFERENCE SAMPLES (match shape & voice)\n${brand.sample_posts.map((s, i) => `--- SAMPLE ${i + 1}: ${s.label} ---\n${s.text}`).join("\n\n")}\n` : ""}
+
+## OUTPUT FORMAT
+Return ONLY a JSON array. Each item is one post with this exact schema:
+\`\`\`json
+[
+  {
+    "title": "Short human-readable title (under 10 words)",
+    "topic": "Subject of the post (plain Vietnamese or English phrase)",
+    "caption_vi": "Full Vietnamese Facebook caption with emoji, line breaks, contact block, hashtags",
+    "caption_en": "Full English Facebook caption with emoji, line breaks, contact block, hashtags",
+    "content_type": "educational",
+    "service_area": "family-law",
+    "language": "both",
+    "type": "feed-square",
+    "prompt": "Visual description of the image: scene, composition, lighting, subject, mood. 2-3 sentences. Do NOT include any text in the scene — text goes in text_overlay.",
+    "text_overlay": {
+      "headline": "BANNER HEADLINE (max 6 words, uppercase)",
+      "subline": "Supporting line (max 12 words)",
+      "cta": "CTA (max 3 words)"
+    },
+    "style": "professional",
+    "use_model": null,
+    "use_reference": null,
+    "scheduled_date": "2026-04-22",
+    "ads_enabled": false,
+    "status": "draft"
+  }
+]
+\`\`\`
+
+## FIELD RULES
+- **title** (required): short title shown in lists
+- **topic**: plain subject line for filtering & regeneration
+- **caption_vi / caption_en**: the actual Facebook caption body. Include at least one if \`language\` = "vi" or "en"; include both if \`language\` = "both". Follow the style reference samples above for structure (emoji headers, bullet points, rhetorical questions, CTA block, contact block, hashtags).
+- **content_type**: one of \`educational\` | \`authority\` | \`promotional\` | \`engagement\`
+- **service_area**: one of \`family-law\` | \`civil-disputes\` | \`land-real-estate\` | \`corporate\` | \`criminal\` | \`labor\` | \`commercial\` | \`foreign-investment\` | \`general\`
+- **language**: \`vi\` | \`en\` | \`both\`
+- **type**: one of \`feed-square\` (1080×1080), \`feed-wide\` (1200×630), \`story\` (1080×1920), \`carousel\` (1080×1080), \`ad-square\` (1080×1080), \`ad-landscape\` (1200×628), \`cover\` (820×312). Default \`feed-square\`.
+- **prompt**: describe the VISUAL scene for the AI image generator. No text in image.
+- **text_overlay**: text rendered ON the image. Short; keeps <20% of image area.
+- **style**: one of \`professional\` | \`bold\` | \`minimal\` | \`warm\` | \`dark-luxury\` | \`vibrant\` | \`editorial\`
+- **use_model**: set to a model \`id\` from the brand's models list above, or \`null\`
+- **use_reference**: set to a reference \`id\` from the brand's references list above, or \`null\`
+- **scheduled_date**: \`YYYY-MM-DD\` or null — weekday suggestion for publishing
+- **ads_enabled**: \`true\` if the post is part of a paid ads campaign (ads fields are filled in the app)
+- **status**: always \`"draft"\` for imported posts
+
+## CONTENT MIX
+- Generate exactly ${count} posts
+- Mix content_types: at least 2 educational, 2 authority, 2 promotional, 2 engagement
+- Mix service_areas (if brand serves multiple)
+- Mix post types: at least 3 different \`type\` values
+- Vary visual styles: at least 3 different \`style\` values
+- If the brand has sample_posts above, match their structure/voice/emoji-patterns
+
+Return ONLY the JSON array, no explanation.`;
 }
 
 export function generateContentCalendarPrompt(brand: BrandConfig, weeks = 4): string {

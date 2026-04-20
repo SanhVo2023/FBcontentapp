@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
+import { generatePostBatchPrompt } from "@/lib/prompt-templates";
 
 async function api(url: string, body?: unknown) {
   const opts: RequestInit = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
@@ -170,10 +171,10 @@ export default function BatchPage() {
         </div>
       </div>
 
-      {showImport && (
+      {showImport && brand && (
         <ImportJsonModal
           title="Import Posts JSON"
-          description="Paste a JSON array of posts from an AI agent. Use the AI Templates page to generate the correct format."
+          description="Paste a JSON array of posts from an AI agent. Click Copy AI Prompt for the correct schema."
           placeholder='[{"id": "post-001", "title": "...", "type": "feed-square", "prompt": "...", "style": "professional", "status": "pending"}]'
           validate={(data) => {
             if (!Array.isArray(data)) return "Expected a JSON array of posts";
@@ -188,6 +189,7 @@ export default function BatchPage() {
             setShowImport(false);
           }}
           onClose={() => setShowImport(false)}
+          copyPrompt={generatePostBatchPrompt(brand, 12)}
         />
       )}
 
