@@ -138,6 +138,15 @@ export default function PostDetailPage() {
     })();
   }, [postId]);
 
+  // Freshly-created posts land with ?new=1 — open the caption drawer so the
+  // "click to edit" affordance is visible immediately.
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && !loading) {
+      setDrawerMode("caption");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2500); };
 
   // Keyboard: Esc closes drawer or exits caption edit
@@ -563,7 +572,6 @@ export default function PostDetailPage() {
                     <div className="text-[10px] text-gray-600 space-y-0.5 pt-2 border-t border-gray-800">
                       {post.created_at && <div>{T.created_at}: {new Date(post.created_at).toLocaleString()}</div>}
                       {post.updated_at && <div>{T.updated_at}: {new Date(post.updated_at).toLocaleString()}</div>}
-                      {post.campaign_id && <div>{T.campaign}: <Link href={`/content/campaigns/${post.campaign_id}`} className="text-blue-400 hover:underline">{post.campaign_id.slice(0, 8)}...</Link></div>}
                     </div>
                   )}
                 </div>

@@ -73,9 +73,9 @@ export default function DashboardPage() {
               <div className="text-[11px] text-gray-500 mt-1">{T.dash_batch_desc}</div>
             </Link>
             <Link href="/content/create" className="bg-gradient-to-br from-green-600/20 to-green-600/5 border border-green-500/30 rounded-xl p-4 hover:border-green-500/60 transition group">
-              <div className="text-xl mb-1.5">🚀</div>
-              <div className="font-semibold text-sm text-white group-hover:text-green-400 transition">{T.dash_campaign}</div>
-              <div className="text-[11px] text-gray-500 mt-1">{T.dash_campaign_desc}</div>
+              <div className="text-xl mb-1.5">✍️</div>
+              <div className="font-semibold text-sm text-white group-hover:text-green-400 transition">{T.dash_create}</div>
+              <div className="text-[11px] text-gray-500 mt-1">{T.dash_create_desc}</div>
             </Link>
           </div>
         </div>

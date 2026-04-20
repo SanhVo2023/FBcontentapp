@@ -57,15 +57,14 @@ export const T = {
   approved: "Đã duyệt!",
   trashed: "Đã chuyển vào thùng rác",
   restored: "Đã khôi phục!",
-  campaign_created: "Chiến dịch đã tạo!",
 
   // ── Dashboard ──
   dash_title: "Apolo Content Studio",
   dash_content: "Nội dung",
   dash_content_hub: "Trung tâm nội dung",
   dash_content_hub_desc: "Bảng kanban, lịch & bộ lọc",
-  dash_create: "Tạo nội dung",
-  dash_create_desc: "Chiến dịch, bài đơn, hoặc nhập JSON",
+  dash_create: "Tạo bài mới",
+  dash_create_desc: "Soạn bài với AI hoặc nhập JSON",
   dash_calendar: "Lịch",
   dash_calendar_desc: "Lên lịch nội dung trực quan",
   dash_studio: "Xưởng hình ảnh",
@@ -73,38 +72,20 @@ export const T = {
   dash_gen_banner_desc: "Tạo banner Facebook",
   dash_batch: "Tạo hàng loạt",
   dash_batch_desc: "Tạo nhiều banner cùng lúc",
-  dash_campaign: "Chiến dịch mới",
-  dash_campaign_desc: "Tạo chiến dịch nội dung AI",
   dash_brands: "Thương hiệu",
 
   // ── Content Hub ──
-  campaigns: "Chiến dịch",
   posts: "Bài viết",
   all_brands: "Tất cả",
   kanban: "Kanban",
   calendar: "Lịch",
   table: "Bảng",
-  variants: "biến thể",
   unscheduled: "Chưa lên lịch",
   today: "Hôm nay",
 
   // ── Content Create ──
-  create_title: "Tạo nội dung",
-  create_how: "Bạn muốn tạo nội dung như thế nào?",
-  create_campaign: "Chiến dịch",
-  create_campaign_desc: "Nhập ý tưởng + bối cảnh. AI tạo chiến dịch với nhiều biến thể nội dung.",
-  create_single: "Bài đơn",
-  create_single_desc: "Nhập chủ đề, AI tạo bài viết — caption, banner, gợi ý lịch.",
-  create_json: "Nhập JSON",
-  create_json_desc: "Dán hoặc tải file JSON để tạo nhiều bài viết cùng lúc.",
-  content_idea: "Ý tưởng nội dung",
-  context_type: "Loại bối cảnh",
-  context_detail: "Chi tiết bối cảnh",
-  content_formats: "Định dạng nội dung",
+  create_title: "Tạo bài mới",
   language: "Ngôn ngữ",
-  generate_campaign: "Tạo chiến dịch",
-  create_campaign_btn: "Tạo chiến dịch",
-  edit_content: "Chỉnh sửa nội dung & prompt",
   remove: "Xóa",
 
   // ── Post Detail ──
@@ -136,7 +117,6 @@ export const T = {
   info: "Thông tin",
   created_at: "Ngày tạo",
   updated_at: "Ngày sửa",
-  campaign: "Chiến dịch",
 
   // ── Studio ──
   studio_title: "Xưởng hình ảnh",
@@ -188,7 +168,6 @@ export const T = {
   no_brands: "Chưa có thương hiệu",
   description: "Mô tả",
 
-  // ── Campaign Detail ──
   show_versions: "Xem phiên bản",
   trash_non_approved: "Xóa ảnh chưa duyệt",
 

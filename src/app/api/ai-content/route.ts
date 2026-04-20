@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   generateCaptions, suggestVariations, generateWeekContent,
   suggestLegalContext, createPostFromContext, createImagePromptFromContent,
-  generateFullPost, generateCampaignContent, composePost,
+  generateFullPost, composePost,
 } from "@/lib/gemini-text";
 import type { BrandConfig } from "@/lib/fb-specs";
 
@@ -51,17 +51,6 @@ export async function POST(req: NextRequest) {
       }
       case "compose_post": {
         const result = await composePost(brand, body.input as Parameters<typeof composePost>[1]);
-        return NextResponse.json(result);
-      }
-      case "generate_campaign": {
-        const result = await generateCampaignContent(
-          body.content_idea as string,
-          body.context_type as string || "content",
-          body.context_detail as string || "",
-          brand,
-          (body.language as "vi" | "en" | "both") || "both",
-          body.formats as string[] | undefined,
-        );
         return NextResponse.json(result);
       }
       default:
