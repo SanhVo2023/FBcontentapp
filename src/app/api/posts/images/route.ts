@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPostThumbnails, getPostImageVersions, approveImage, trashNonApprovedImages } from "@/lib/db";
+import { getPostThumbnails, getPostImageVersions, approveImage, trashNonApprovedImages, trashPostImage } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,6 +34,11 @@ export async function POST(req: NextRequest) {
 
     if (action === "trash_non_approved") {
       await trashNonApprovedImages(body.post_id);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "trash") {
+      await trashPostImage(body.image_id);
       return NextResponse.json({ ok: true });
     }
 

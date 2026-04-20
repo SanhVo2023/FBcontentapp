@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { Eye, Copy, Trash2, CalendarDays, GripVertical } from "lucide-react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
@@ -17,13 +18,10 @@ type Props = {
   dragHandleProps?: Record<string, unknown>;
 };
 
-export default function PostCard({ post, thumbnailUrl, brand, showBrand, onAction, dragHandleProps }: Props) {
+function PostCard({ post, thumbnailUrl, brand, showBrand, onAction, dragHandleProps }: Props) {
   const ct = CONTENT_TYPES.find((c) => c.value === post.content_type);
   const legacy = isLegacyDraftStatus(post.status);
   const legacyStatus = legacy ? POST_STATUSES.find((s) => s.value === post.status) : null;
-  const sheetState = post.sheet_status;
-  const sheetApproved = sheetState === "Approved";
-  const sheetRejected = sheetState === "Rejected" || sheetState === "Revise";
 
   return (
     <div className="bg-gray-900/70 border border-gray-800/50 rounded-xl overflow-hidden hover:border-gray-700 transition group">
@@ -55,13 +53,6 @@ export default function PostCard({ post, thumbnailUrl, brand, showBrand, onActio
         {ct && (
           <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${ct.color}/80 text-white backdrop-blur-sm`}>
             {ct.emoji} {ct.label}
-          </div>
-        )}
-
-        {/* Sheet status badge */}
-        {post.sheet_post_id && (
-          <div className={`absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium backdrop-blur-sm ${sheetApproved ? "bg-green-500/80 text-white" : sheetRejected ? "bg-red-500/80 text-white" : "bg-amber-500/80 text-white"}`}>
-            {sheetApproved ? "✓ Duyệt" : sheetRejected ? "✗ Từ chối" : `${post.sheet_post_id}`}
           </div>
         )}
       </div>
@@ -101,3 +92,5 @@ export default function PostCard({ post, thumbnailUrl, brand, showBrand, onActio
     </div>
   );
 }
+
+export default memo(PostCard);

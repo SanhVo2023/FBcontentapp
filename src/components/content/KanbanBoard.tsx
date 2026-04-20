@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { KANBAN_COLUMNS, getKanbanColumn } from "@/lib/fb-specs";
 import KanbanColumn from "./KanbanColumn";
 import PostCard from "./PostCard";
+
+type KanbanKey = "draft" | "submitted" | "approved";
 
 type Props = {
   postsByStatus: Record<string, PostConfig[]>;
@@ -14,15 +16,23 @@ type Props = {
   onAction: (action: string, postId: string, extra?: Record<string, unknown>) => void;
 };
 
+// Column tooltip labels — help users understand what each column means post-Sheet removal.
+const COLUMN_TOOLTIPS: Record<KanbanKey, string> = {
+  draft: "Đang soạn — chưa gửi khách",
+  submitted: "Đang chờ khách duyệt",
+  approved: "Khách đã duyệt",
+};
+
 export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBrand, onAction }: Props) {
+  // draggingId stays in state so ONLY the dragged card needs to re-apply a CSS class.
+  // draggingFromRef stays in a ref — it's only read inside handlers, never rendered.
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [draggingFrom, setDraggingFrom] = useState<"draft" | "submitted" | "approved" | null>(null);
-  const [overColumn, setOverColumn] = useState<string | null>(null);
+  const draggingFromRef = useRef<KanbanKey | null>(null);
+  const lastOverColRef = useRef<HTMLElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Regroup posts into 3 kanban columns
   const grouped = useMemo(() => {
-    const buckets: Record<"draft" | "submitted" | "approved", PostConfig[]> = { draft: [], submitted: [], approved: [] };
+    const buckets: Record<KanbanKey, PostConfig[]> = { draft: [], submitted: [], approved: [] };
     for (const posts of Object.values(postsByStatus)) {
       for (const p of posts) {
         const col = getKanbanColumn(p.status);
@@ -32,51 +42,59 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
     return buckets;
   }, [postsByStatus]);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
+    setTimeout(() => setToast(null), 2500);
+  }, []);
 
-  const handleDragStart = (e: React.DragEvent, postId: string, fromColumn: "draft" | "submitted" | "approved") => {
+  // Imperatively toggle `.is-over` on the column under the cursor.
+  // This avoids React state updates on every dragOver event (dozens per second).
+  const setOverColumn = useCallback((el: HTMLElement | null) => {
+    if (lastOverColRef.current && lastOverColRef.current !== el) {
+      lastOverColRef.current.classList.remove("is-over");
+    }
+    if (el) el.classList.add("is-over");
+    lastOverColRef.current = el;
+  }, []);
+
+  const handleDragStart = useCallback((e: React.DragEvent, postId: string, fromColumn: KanbanKey) => {
     e.dataTransfer.setData("text/plain", postId);
     e.dataTransfer.effectAllowed = "move";
+    draggingFromRef.current = fromColumn;
     setDraggingId(postId);
-    setDraggingFrom(fromColumn);
-  };
+  }, []);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
+    draggingFromRef.current = null;
     setDraggingId(null);
-    setDraggingFrom(null);
     setOverColumn(null);
-  };
+  }, [setOverColumn]);
 
-  const handleDragOver = (e: React.DragEvent, status: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setOverColumn(status);
-  };
+    setOverColumn(e.currentTarget as HTMLElement);
+  }, [setOverColumn]);
 
-  const handleDragLeave = (e: React.DragEvent, status: string) => {
-    if (overColumn === status) {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const { clientX, clientY } = e;
-      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-        setOverColumn(null);
-      }
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const { clientX, clientY } = e;
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      if (lastOverColRef.current === el) setOverColumn(null);
     }
-  };
+  }, [setOverColumn]);
 
-  const handleDrop = (e: React.DragEvent, toColumn: "draft" | "submitted" | "approved") => {
+  const handleDrop = useCallback((e: React.DragEvent, toColumn: KanbanKey) => {
     e.preventDefault();
     const postId = e.dataTransfer.getData("text/plain");
-    const from = draggingFrom;
+    const from = draggingFromRef.current;
     setOverColumn(null);
+    draggingFromRef.current = null;
     setDraggingId(null);
-    setDraggingFrom(null);
 
     if (!postId || !from || from === toColumn) return;
 
-    // Find the post
     let post: PostConfig | undefined;
     for (const bucket of Object.values(grouped)) {
       const found = bucket.find((p) => p.id === postId);
@@ -84,30 +102,28 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
     }
     if (!post) return;
 
-    // Enforce drag rules
+    // Only the client can push a post to Approved — we don't let creators self-approve.
     if (toColumn === "approved") {
-      showToast("Chỉ khách duyệt trên Sheet mới chuyển sang Đã duyệt");
+      showToast("Chỉ khách duyệt mới chuyển bài sang Đã duyệt");
       return;
     }
 
     if (toColumn === "submitted" && from === "draft") {
-      // Validate: has caption and has image
       const hasCaption = !!(post.caption_vi?.trim() || post.caption_en?.trim());
       const hasImage = !!thumbnails[post.id];
-      if (!hasCaption) { showToast("Bài viết cần có caption trước khi gửi Sheet"); return; }
-      if (!hasImage) { showToast("Bài viết cần có hình trước khi gửi Sheet"); return; }
-      onAction("submit_to_sheet", postId);
+      if (!hasCaption) { showToast("Cần có caption trước khi gửi khách"); return; }
+      if (!hasImage) { showToast("Cần có hình trước khi gửi khách"); return; }
+      onAction("update", postId, {
+        status: "submitted",
+        client_verify_text: "pending",
+        client_verify_image: "pending",
+        client_verify_ads: "pending",
+        client_approval_notes: null,
+      });
       return;
     }
 
-    if (toColumn === "draft" && from === "submitted") {
-      // Manual revert — just update status, don't touch sheet
-      onAction("update", postId, { status: "draft" });
-      return;
-    }
-
-    if (toColumn === "draft" && from === "approved") {
-      // Rework: move back to draft
+    if (toColumn === "draft" && (from === "submitted" || from === "approved")) {
       onAction("update", postId, { status: "draft" });
       return;
     }
@@ -116,7 +132,7 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
       showToast("Bài đã duyệt — không cần gửi lại");
       return;
     }
-  };
+  }, [grouped, thumbnails, onAction, setOverColumn, showToast]);
 
   return (
     <div className="flex-1 overflow-x-auto overflow-y-hidden relative">
@@ -133,30 +149,33 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
               key={col.key}
               status={col.key}
               label={col.label}
+              tooltip={COLUMN_TOOLTIPS[col.key]}
               dotColor={col.dotColor}
               count={posts.length}
-              isOver={overColumn === col.key}
-              onDragOver={(e) => handleDragOver(e, col.key)}
-              onDragLeave={(e) => handleDragLeave(e, col.key)}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, col.key)}
             >
-              {posts.map((post) => (
-                <div
-                  key={post.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, post.id, col.key)}
-                  onDragEnd={handleDragEnd}
-                  className={`cursor-grab active:cursor-grabbing transition-opacity ${draggingId === post.id ? "opacity-40" : ""}`}
-                >
-                  <PostCard
-                    post={post}
-                    thumbnailUrl={thumbnails[post.id]}
-                    brand={brands.find((b) => b.brand_id === post.brand_id)}
-                    showBrand={showBrand}
-                    onAction={onAction}
-                  />
-                </div>
-              ))}
+              {posts.map((post) => {
+                const isDragging = draggingId === post.id;
+                return (
+                  <div
+                    key={post.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, post.id, col.key)}
+                    onDragEnd={handleDragEnd}
+                    className={`kanban-card cursor-grab active:cursor-grabbing ${isDragging ? "is-dragging" : ""}`}
+                  >
+                    <PostCard
+                      post={post}
+                      thumbnailUrl={thumbnails[post.id]}
+                      brand={brands.find((b) => b.brand_id === post.brand_id)}
+                      showBrand={showBrand}
+                      onAction={onAction}
+                    />
+                  </div>
+                );
+              })}
             </KanbanColumn>
           );
         })}

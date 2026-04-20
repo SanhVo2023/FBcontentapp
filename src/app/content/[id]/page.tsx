@@ -12,7 +12,7 @@ import AIComposerPanel from "@/components/content/AIComposerPanel";
 import ImageGenPanel from "@/components/content/ImageGenPanel";
 import CommentsPanel from "@/components/client/CommentsPanel";
 import { T } from "@/lib/ui-text";
-import { X, MessageSquare, ImageIcon, Settings, ExternalLink, RotateCcw, Send, MoreHorizontal } from "lucide-react";
+import { X, MessageSquare, MessageCircle, ImageIcon, Settings, Send } from "lucide-react";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
 type PostImageRow = { id: string; post_id: string; variant_type: string; r2_url: string; status: string; created_at: string; version?: number; approved?: boolean };
@@ -39,9 +39,11 @@ export default function PostDetailPage() {
   const [allTags, setAllTags] = useState<TagRow[]>([]);
   const [postTags, setPostTags] = useState<TagRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Autosave guard — flips true after initial load so hydrating fields doesn't trigger a save.
+  const loadedRef = useRef(false);
 
   // Editable fields
   const [title, setTitle] = useState("");
@@ -76,9 +78,6 @@ export default function PostDetailPage() {
   const [editingCaption, setEditingCaption] = useState(false);
   const [displayLanguage, setDisplayLanguage] = useState<"vi" | "en">("vi");
   const [newTagName, setNewTagName] = useState("");
-  const [sheetBusy, setSheetBusy] = useState<"push" | "pull" | null>(null);
-  const [approvalNotes, setApprovalNotes] = useState<string>("");
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [submittingClient, setSubmittingClient] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -131,25 +130,13 @@ export default function PostDetailPage() {
           setCommentCount((cr?.comments || []).length);
         } catch { /* ok */ }
       } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
-      finally { setLoading(false); }
+      finally {
+        setLoading(false);
+        // Autosave is armed on the next tick so initial setState calls don't trigger it.
+        requestAnimationFrame(() => { loadedRef.current = true; });
+      }
     })();
   }, [postId]);
-
-  // Auto-pull sheet status on mount if post is submitted
-  useEffect(() => {
-    if (!post?.sheet_post_id || post.status !== "submitted") return;
-    api("/api/sheet-sync", { action: "pull_status", post_id: postId })
-      .then((r) => {
-        if (r?.found) {
-          setPost((prev) => prev ? { ...prev, sheet_status: r.status } : prev);
-          if (r.status === "Approved" && post.status === "submitted") setStatus("approved");
-          else if ((r.status === "Rejected" || r.status === "Revise") && post.status === "submitted") setStatus("draft");
-          if (r.approval_notes) setApprovalNotes(r.approval_notes);
-        }
-      })
-      .catch(() => { /* silent */ });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post?.id]);
 
   const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2500); };
 
@@ -167,7 +154,7 @@ export default function PostDetailPage() {
   });
 
   const handleSave = useCallback(async () => {
-    setSaving(true); setError(null);
+    setSaveState("saving"); setError(null);
     try {
       await api("/api/posts", { action: "update", post_id: postId, updates: {
         title, caption_vi: captionVi, caption_en: captionEn, text_overlay: { headline, subline, cta },
@@ -182,10 +169,19 @@ export default function PostDetailPage() {
         ads_budget_per_day: adsBudgetPerDay || null,
         ads_duration_days: adsDurationDays || null,
       }});
-      showMsg(T.saved);
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
-    finally { setSaving(false); }
+      setSaveState("saved");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed");
+      setSaveState("idle");
+    }
   }, [postId, title, captionVi, captionEn, headline, subline, cta, prompt, status, contentType, serviceArea, scheduledDate, postType, language, topic, useModel, style, adsEnabled, adsName, adsObjective, adsAudience, adsCta, adsLandingUrl, adsBudgetPerDay, adsDurationDays]);
+
+  // Debounced autosave — fires 1 s after the last edit to any tracked field.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const t = setTimeout(() => { handleSave(); }, 1000);
+    return () => clearTimeout(t);
+  }, [handleSave]);
 
   // Auto-save on caption blur
   const handleCaptionBlur = async () => {
@@ -235,33 +231,6 @@ export default function PostDetailPage() {
     finally { setSubmittingClient(false); }
   };
 
-  const handlePushToSheet = async () => {
-    setSheetBusy("push"); setError(null);
-    try {
-      const r = await api("/api/sheet-sync", { action: "push_post", post_id: postId });
-      if (r?.sheet_post_id && post) {
-        setPost({ ...post, status: "submitted", sheet_post_id: r.sheet_post_id, sheet_row_url: r.sheet_url, sheet_status: "Pending Hiển Approval" });
-        setStatus("submitted");
-      }
-      showMsg(T.pushed_to_sheet);
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : T.sheet_sync_error); }
-    finally { setSheetBusy(null); }
-  };
-
-  const handlePullStatus = async () => {
-    setSheetBusy("pull"); setError(null);
-    try {
-      const r = await api("/api/sheet-sync", { action: "pull_status", post_id: postId });
-      if (r?.found && post) {
-        setPost({ ...post, sheet_status: r.status });
-        if (r.approval_notes) setApprovalNotes(r.approval_notes);
-        if (r.new_app_status) setStatus(r.new_app_status);
-        showMsg(`Sheet: ${r.status}`);
-      }
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
-    finally { setSheetBusy(null); }
-  };
-
   const handleComposed = (result: { caption_vi?: string; caption_en?: string; headline: string; subline: string; cta: string; hashtags: string }) => {
     if (result.caption_vi !== undefined) {
       const final = result.hashtags && !result.caption_vi.includes("#") ? `${result.caption_vi}\n\n${result.hashtags}` : result.caption_vi;
@@ -295,8 +264,6 @@ export default function PostDetailPage() {
   const setCurrentCaption = displayLanguage === "vi" ? setCaptionVi : setCaptionEn;
   const currentTextareaRef = displayLanguage === "vi" ? viTextareaRef : enTextareaRef;
 
-  const canSubmit = (status === "draft" || status === "images_done" || status === "approved") && !post.sheet_post_id;
-  const isSubmitted = !!post.sheet_post_id;
   // Client portal flags
   const hasCaption = !!(captionVi.trim() || captionEn.trim());
   const hasImage = !!previewImageUrl;
@@ -308,12 +275,6 @@ export default function PostDetailPage() {
     post.client_verify_text === "rejected" || post.client_verify_image === "rejected" ||
     post.client_verify_text === "revise" || post.client_verify_image === "revise" ||
     (adsRelevantForClient && (post.client_verify_ads === "rejected" || post.client_verify_ads === "revise"));
-  const sheetStatusLabel =
-    post.sheet_status === "Approved" ? T.sheet_approved :
-    post.sheet_status === "Rejected" ? T.sheet_rejected :
-    post.sheet_status === "Revise" ? T.sheet_revise :
-    post.sheet_status === "Pending Hiển Approval" ? T.sheet_pending :
-    post.sheet_status;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-950">
@@ -334,7 +295,7 @@ export default function PostDetailPage() {
           <button onClick={() => setDrawerMode("image")} title="Tạo hình" className={`p-1.5 rounded transition ${drawerMode === "image" ? "bg-purple-500/20 text-purple-400" : "text-gray-500 hover:text-white"}`}><ImageIcon size={14} /></button>
           <button onClick={handleSettingsClick} title="Cài đặt" className={`p-1.5 rounded transition ${drawerMode === "settings" ? "bg-amber-500/20 text-amber-400" : "text-gray-500 hover:text-white"}`}><Settings size={14} /></button>
           <button onClick={() => setDrawerMode("comments")} title="Bình luận" className={`p-1.5 rounded transition relative ${drawerMode === "comments" ? "bg-green-500/20 text-green-400" : "text-gray-500 hover:text-white"}`}>
-            <MessageSquare size={14} />
+            <MessageCircle size={14} />
             {commentCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{commentCount}</span>}
           </button>
         </div>
@@ -360,25 +321,18 @@ export default function PostDetailPage() {
             </span>
           )}
 
-          {/* Sheet sync: moved under ⋯ menu */}
-          <div className="relative">
-            <button onClick={() => setShowMoreMenu(!showMoreMenu)} className="p-1 text-gray-500 hover:text-white rounded"><MoreHorizontal size={14} /></button>
-            {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-1 w-52 bg-gray-900 border border-gray-800 rounded-lg shadow-xl z-20 py-1">
-                <div className="text-[9px] text-gray-600 px-3 py-1 uppercase">Đồng bộ Sheet (tùy chọn)</div>
-                {canSubmit && <button onClick={() => { handlePushToSheet(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.push_to_sheet}</button>}
-                {isSubmitted && <button onClick={() => { handlePullStatus(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.pull_status}</button>}
-                {isSubmitted && post.sheet_row_url && <a href={post.sheet_row_url} target="_blank" rel="noreferrer" className="block px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-800">Mở trên Sheet</a>}
-                <div className="border-t border-gray-800 my-1" />
-                <button onClick={() => { handleDuplicate(); setShowMoreMenu(false); }} className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800">{T.duplicate}</button>
-              </div>
-            )}
-          </div>
-
+          <button onClick={handleDuplicate} className="px-2 py-1 bg-gray-800 text-gray-300 text-[10px] rounded-lg hover:bg-gray-700">{T.duplicate}</button>
           <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">{T.trash}</button>
-          <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white text-[10px] font-bold rounded-lg">
-            {saving ? "..." : T.save} <span className="text-blue-300 text-[8px] hidden sm:inline">^S</span>
-          </button>
+          <span
+            className={`text-[10px] px-2 py-1 rounded-lg select-none ${
+              saveState === "saving" ? "bg-blue-500/10 text-blue-400" :
+              saveState === "saved" ? "bg-green-500/10 text-green-400" :
+              "text-gray-500"
+            }`}
+            title="Tự động lưu sau 1s — Ctrl+S để lưu ngay"
+          >
+            {saveState === "saving" ? "Đang lưu..." : saveState === "saved" ? "Đã lưu ✓" : "Chờ lưu"}
+          </span>
         </div>
       </div>
 
@@ -418,10 +372,6 @@ export default function PostDetailPage() {
             language={displayLanguage}
             onLanguageChange={setDisplayLanguage}
             showLanguageToggle={language === "both"}
-            sheetStatus={post.sheet_status}
-            sheetStatusLabel={sheetStatusLabel}
-            approvalNotes={approvalNotes}
-            sheetRowUrl={post.sheet_row_url}
             timestamp={post.scheduled_date}
           />
 
@@ -525,7 +475,9 @@ export default function PostDetailPage() {
                   <div>
                     <label className="text-[9px] text-gray-500 uppercase block mb-1">{T.status}</label>
                     <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none">
-                      {POST_STATUSES.filter((s) => s.value !== "trashed").map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      {POST_STATUSES
+                        .filter((s) => ["draft", "submitted", "approved", "published"].includes(s.value))
+                        .map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
                   <div>
@@ -555,7 +507,7 @@ export default function PostDetailPage() {
                     </label>
                     {adsEnabled && (
                       <div className="space-y-2 mt-2 pt-2 border-t border-orange-500/20">
-                        <p className="text-[10px] text-orange-300/80">Khi gửi Sheet, bài này cũng được thêm vào sheet Ads_Campaigns.</p>
+                        <p className="text-[10px] text-orange-300/80">Cấu hình quảng cáo sẽ đi kèm khi gửi khách duyệt.</p>
                         <input value={adsName} onChange={(e) => setAdsName(e.target.value)} placeholder="Tên chiến dịch (tự động nếu bỏ trống)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
                         <div className="grid grid-cols-2 gap-2">
                           <select value={adsObjective} onChange={(e) => setAdsObjective(e.target.value)} className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none">
@@ -579,7 +531,7 @@ export default function PostDetailPage() {
                           <div className="text-[10px] text-gray-400">Tổng ngân sách: <span className="text-orange-400 font-medium">{(adsBudgetPerDay * adsDurationDays).toLocaleString("vi-VN")}₫</span></div>
                         )}
                         {post?.ads_campaign_id && (
-                          <div className="text-[10px] text-green-400 bg-green-500/10 rounded px-2 py-1">✓ Đã tạo trong Sheet: {post.ads_campaign_id}</div>
+                          <div className="text-[10px] text-green-400 bg-green-500/10 rounded px-2 py-1">✓ Đã tạo chiến dịch: {post.ads_campaign_id}</div>
                         )}
                       </div>
                     )}

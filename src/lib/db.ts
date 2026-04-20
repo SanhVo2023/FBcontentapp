@@ -954,6 +954,10 @@ export async function trashNonApprovedImages(postId: string): Promise<void> {
     .neq("status", "trashed");
 }
 
+export async function trashPostImage(imageId: string): Promise<void> {
+  await supabase.from("post_images").update({ status: "trashed", approved: false }).eq("id", imageId);
+}
+
 // ============================================
 // POST COMMENTS
 // ============================================

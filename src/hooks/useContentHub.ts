@@ -75,7 +75,6 @@ export function useContentHub() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [detailPost, setDetailPost] = useState<PostConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
@@ -195,8 +194,8 @@ export function useContentHub() {
 
   const activeFilterCount = [filterStatus.length > 0, !!filterContentType, !!filterServiceArea, filterTags.length > 0].filter(Boolean).length;
 
-  // Actions
-  const handleAction = async (action: string, postId: string, extra?: Record<string, unknown>) => {
+  // Actions — stable reference so PostCard/KanbanColumn memo stays effective
+  const handleAction = useCallback(async (action: string, postId: string, extra?: Record<string, unknown>) => {
     setActionMsg(null);
     try {
       if (action === "trash") {
@@ -207,42 +206,12 @@ export function useContentHub() {
         setActionMsg("Duplicated");
       } else if (action === "update") {
         await api("/api/posts", { action: "update", post_id: postId, updates: extra });
-      } else if (action === "submit_to_sheet") {
-        const r = await api("/api/sheet-sync", { action: "push_post", post_id: postId });
-        setActionMsg(`Đã gửi Sheet: ${r?.sheet_post_id || "OK"}`);
-      } else if (action === "pull_sheet_status") {
-        const r = await api("/api/sheet-sync", { action: "pull_status", post_id: postId });
-        if (r?.found) setActionMsg(`Sheet: ${r.status}`);
-        else setActionMsg("Bài chưa có trên Sheet");
       }
       await loadPosts();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Action failed");
     }
-  };
-
-  const handleBulkPullSheet = useCallback(async () => {
-    const submittedWithSheet = posts.filter((p) => p.status === "submitted" && p.sheet_post_id);
-    if (submittedWithSheet.length === 0) return;
-    try {
-      await api("/api/sheet-sync", { action: "bulk_pull", post_ids: submittedWithSheet.map((p) => p.id) });
-      await loadPosts();
-    } catch { /* silent */ }
-  }, [posts, loadPosts]);
-
-  // Auto-pull sheet status when Kanban view opens
-  useEffect(() => {
-    if (view !== "kanban" || displayMode !== "posts" || loading || postsLoading) return;
-    const submitted = posts.filter((p) => p.status === "submitted" && p.sheet_post_id);
-    if (submitted.length === 0) return;
-    // Only auto-pull once per mount; debounce by submitted count signature
-    const sig = submitted.map((p) => p.id).join(",");
-    const key = `bulk_pulled_${sig}`;
-    if (typeof window !== "undefined" && sessionStorage.getItem(key)) return;
-    if (typeof window !== "undefined") sessionStorage.setItem(key, "1");
-    handleBulkPullSheet();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, displayMode, loading, postsLoading]);
+  }, [loadPosts]);
 
   const handleCampaignAction = async (action: string, campaignId: string, extra?: Record<string, unknown>) => {
     setActionMsg(null);
@@ -269,16 +238,6 @@ export function useContentHub() {
         await api("/api/posts", { action: "bulk_delete", post_ids: ids });
       } else if (action === "tag" && value) {
         await api("/api/tags", { action: "bulk_add", post_ids: ids, tag_id: value });
-      } else if (action === "submit_to_sheet") {
-        // Sequential push to respect GAS rate limits
-        let ok = 0;
-        for (const pid of ids) {
-          try {
-            await api("/api/sheet-sync", { action: "push_post", post_id: pid });
-            ok++;
-          } catch { /* skip */ }
-        }
-        setActionMsg(`Đã gửi ${ok}/${ids.length} bài lên Sheet`);
       }
       setSelected(new Set());
       await loadPosts();
@@ -311,12 +270,10 @@ export function useContentHub() {
     showFilters, setShowFilters, activeFilterCount,
     // Selection
     selected, setSelected, toggleSelect, toggleSelectAll,
-    // Detail
-    detailPost, setDetailPost,
     // Messages
     error, setError, actionMsg, setActionMsg,
     // Actions
-    handleAction, handleCampaignAction, handleBulkAction, handleBulkPullSheet,
+    handleAction, handleCampaignAction, handleBulkAction,
     loadPosts, loadCampaigns,
   };
 }

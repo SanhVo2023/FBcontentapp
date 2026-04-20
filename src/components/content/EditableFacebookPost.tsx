@@ -16,10 +16,6 @@ type Props = {
   language?: "vi" | "en";
   onLanguageChange?: (lang: "vi" | "en") => void;
   showLanguageToggle?: boolean;
-  sheetStatus?: string;
-  sheetStatusLabel?: string;
-  approvalNotes?: string;
-  sheetRowUrl?: string;
   timestamp?: string;
   sponsored?: boolean;
 };
@@ -58,45 +54,12 @@ export default function EditableFacebookPost({
   onCaptionClick, onImageClick,
   editingCaption, onCaptionChange, captionTextareaRef, onCaptionBlur,
   language, onLanguageChange, showLanguageToggle,
-  sheetStatus, sheetStatusLabel, approvalNotes, sheetRowUrl,
   timestamp, sponsored,
 }: Props) {
   const timeText = sponsored ? "Được tài trợ" : formatVietnameseTime(timestamp);
-  const isRejected = sheetStatus === "Rejected" || sheetStatus === "Revise";
-  const isApproved = sheetStatus === "Approved";
 
   return (
     <div className="max-w-[540px] mx-auto">
-      {/* Approval banner */}
-      {approvalNotes && isRejected && (
-        <div className="mb-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-red-400 font-semibold">{sheetStatus === "Rejected" ? "❌ Bị từ chối" : "⚠️ Cần chỉnh sửa"}</span>
-            {sheetRowUrl && <a href={sheetRowUrl} target="_blank" rel="noreferrer" className="ml-auto text-[11px] text-gray-400 hover:text-white underline">Mở Sheet</a>}
-          </div>
-          <p className="text-xs text-red-300 whitespace-pre-wrap">{approvalNotes}</p>
-        </div>
-      )}
-
-      {/* Status pill */}
-      {sheetStatus && (
-        <div className="mb-2 flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
-            isApproved ? "bg-green-500/15 text-green-400 border border-green-500/30" :
-            isRejected ? "bg-red-500/15 text-red-400 border border-red-500/30" :
-            "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-          }`}>
-            {isApproved ? "✓" : isRejected ? "✗" : "⏳"}
-            {sheetStatusLabel || sheetStatus}
-          </span>
-          {sheetRowUrl && (
-            <a href={sheetRowUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 hover:text-blue-300">
-              Xem trên Sheet →
-            </a>
-          )}
-        </div>
-      )}
-
       {/* FB post */}
       <div
         style={{

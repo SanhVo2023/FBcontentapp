@@ -235,22 +235,6 @@ export const T = {
   sample_label_placeholder: "Nhãn (VD: Dịch vụ hợp đồng)",
   sample_text_placeholder: "Dán nội dung bài FB làm mẫu...",
 
-  // ── Sheet sync ──
-  push_to_sheet: "Đẩy lên Sheet",
-  pushed_to_sheet: "Đã đẩy lên Sheet",
-  pushing_to_sheet: "Đang đẩy...",
-  pull_status: "Kéo trạng thái",
-  pulling_status: "Đang kéo...",
-  sheet_status: "Trạng thái Sheet",
-  sheet_pending: "Chờ duyệt",
-  sheet_approved: "Hiển đã duyệt",
-  sheet_rejected: "Bị từ chối",
-  sheet_revise: "Cần sửa",
-  push_all_to_sheet: "Đẩy tất cả lên Sheet",
-  open_in_sheet: "Mở trong Sheet",
-  sheet_not_synced: "Chưa đẩy lên Sheet",
-  sheet_sync_error: "Lỗi đồng bộ Sheet",
-
   // ── Ads ──
   ads_campaign: "Quảng cáo",
   ads_enabled: "Bật quảng cáo",

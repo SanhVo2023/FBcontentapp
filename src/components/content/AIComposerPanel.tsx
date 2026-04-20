@@ -1,29 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Wand2, ChevronDown, ChevronUp, Save, Settings, Trash2, Download } from "lucide-react";
+import { useState } from "react";
+import { Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import type { BrandConfig, ContentType, SamplePost } from "@/lib/fb-specs";
 import { TONE_PRESETS, CONTENT_TYPES, getTonePrompt } from "@/lib/fb-specs";
 import { T } from "@/lib/ui-text";
-
-type GoalTemplate = {
-  id: string;
-  brand_id: string | null;
-  name: string;
-  description: string;
-  post_defaults: Record<string, unknown>;
-  schedule_pattern: string;
-};
-
-type ComposerDefaults = {
-  kind: "composer";
-  tone: string;
-  tone_custom?: string;
-  angle: ContentType;
-  sample_text?: string;
-  fact_hint?: string;
-  language: "vi" | "en" | "both";
-};
 
 type Props = {
   brand: BrandConfig | null;
@@ -58,17 +39,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const [templates, setTemplates] = useState<GoalTemplate[]>([]);
-  const [showManage, setShowManage] = useState(false);
-
-  // Load templates for this brand
-  useEffect(() => {
-    if (!brand?.brand_id) return;
-    api(`/api/templates?brand=${brand.brand_id}`)
-      .then((t) => setTemplates((Array.isArray(t) ? t : []).filter((x: GoalTemplate) => (x.post_defaults as ComposerDefaults)?.kind === "composer")))
-      .catch(() => setTemplates([]));
-  }, [brand?.brand_id]);
-
   const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2000); };
 
   const handleCompose = async () => {
@@ -97,53 +67,8 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
     showMsg(`Đã nạp ${brand.sample_posts.length} bài mẫu`);
   };
 
-  const handleLoadTemplate = (templateId: string) => {
-    if (!templateId) return;
-    const tpl = templates.find((t) => t.id === templateId);
-    if (!tpl) return;
-    const d = tpl.post_defaults as ComposerDefaults;
-    if (d.tone) setTone(d.tone);
-    if (d.tone_custom) setToneCustom(d.tone_custom);
-    if (d.angle) setAngle(d.angle);
-    if (d.sample_text) setSampleText(d.sample_text);
-    if (d.fact_hint) setFacts(d.fact_hint);
-    showMsg(`📋 ${tpl.name}`);
-  };
-
-  const handleSaveTemplate = async () => {
-    const name = window.prompt(T.template_name_prompt);
-    if (!name || !brand) return;
-    const post_defaults: ComposerDefaults = {
-      kind: "composer",
-      tone,
-      tone_custom: tone === "custom" ? toneCustom : undefined,
-      angle,
-      sample_text: sampleText,
-      fact_hint: facts,
-      language,
-    };
-    try {
-      const tpl = await api("/api/templates", {
-        action: "create",
-        template: { brand_id: brand.brand_id, name, description: "", post_defaults, schedule_pattern: "" },
-      });
-      setTemplates((prev) => [...prev, tpl]);
-      showMsg(T.template_saved);
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
-  };
-
-  const handleDeleteTemplate = async (id: string) => {
-    if (!confirm(T.delete + "?")) return;
-    try {
-      await api("/api/templates", { action: "delete", template_id: id });
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
-      showMsg(T.template_deleted);
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
-  };
-
   return (
     <div className="bg-gradient-to-br from-purple-600/10 to-blue-600/5 border border-purple-500/20 rounded-xl overflow-hidden">
-      {/* Header */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -162,39 +87,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
         <div className="border-t border-purple-500/10 p-4 space-y-3">
           {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5 text-red-400 text-xs">{error}</div>}
 
-          {/* Template controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[10px] text-gray-500 uppercase font-medium">{T.load_template}:</label>
-            <select
-              onChange={(e) => { handleLoadTemplate(e.target.value); e.target.value = ""; }}
-              className="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1 text-xs text-white outline-none min-w-[160px]"
-              defaultValue=""
-            >
-              <option value="">— {T.load_template} —</option>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <button type="button" onClick={() => setShowManage(!showManage)} className="p-1 text-gray-500 hover:text-gray-300" title={T.manage_templates}>
-              <Settings size={12} />
-            </button>
-          </div>
-
-          {/* Manage templates list */}
-          {showManage && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-2 space-y-1">
-              {templates.length === 0 ? (
-                <p className="text-[10px] text-gray-600 text-center py-1">{T.no_templates}</p>
-              ) : (
-                templates.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between bg-gray-800/50 rounded px-2 py-1">
-                    <span className="text-xs text-gray-300">{t.name}</span>
-                    <button type="button" onClick={() => handleDeleteTemplate(t.id)} className="text-gray-600 hover:text-red-400"><Trash2 size={10} /></button>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* Tone + Angle row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] text-gray-500 uppercase font-medium block mb-1">{T.tone_of_voice}</label>
@@ -222,7 +114,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
             </div>
           </div>
 
-          {/* Sample posts */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-[10px] text-gray-500 uppercase font-medium">{T.sample_posts_label}</label>
@@ -241,7 +132,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
             />
           </div>
 
-          {/* Facts */}
           <div>
             <label className="text-[10px] text-gray-500 uppercase font-medium block mb-1">{T.facts_label}</label>
             <textarea
@@ -253,7 +143,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
             />
           </div>
 
-          {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
@@ -263,15 +152,6 @@ export default function AIComposerPanel({ brand, language, topic, onComposed }: 
             >
               <Wand2 size={12} />
               {composing ? T.composing : T.compose_now}
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveTemplate}
-              disabled={!brand}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 text-xs rounded-lg transition flex items-center gap-1.5"
-            >
-              <Save size={12} />
-              {T.save_as_template}
             </button>
           </div>
         </div>

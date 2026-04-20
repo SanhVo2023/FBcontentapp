@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus } from "lucide-react";
+import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, UserPlus, X } from "lucide-react";
 import type { BrandConfig, PostConfig, PostType } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
@@ -38,6 +38,8 @@ export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId
   const [includeLogo, setIncludeLogo] = useState(true);
   const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
   const [variants, setVariants] = useState<Set<string>>(new Set([post.type || "feed-square"]));
+  // Local mirror of brand.models so newly-added models appear instantly without a parent refetch.
+  const [models, setModels] = useState(brand?.models || []);
 
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<PostImageRow[]>([]);
@@ -46,8 +48,17 @@ export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId
   const [pendingVariants, setPendingVariants] = useState<string[]>([]);
   const loading = pendingVariants.length > 0;
 
+  // Add-model popover state
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [modelName, setModelName] = useState("");
+  const [modelDesc, setModelDesc] = useState("");
+  const [modelFile, setModelFile] = useState<File | null>(null);
+  const [modelUploading, setModelUploading] = useState(false);
+
   const spec = getPostSpec(postType);
   const activeLogo = selectedLogo || brand?.logo || (brand?.logos?.[0]?.url);
+
+  useEffect(() => { setModels(brand?.models || []); }, [brand]);
 
   const loadImages = useCallback(async () => {
     try {
@@ -102,6 +113,54 @@ export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId
     try { await api("/api/posts/images", { action: "approve", image_id: imageId }); await loadImages(); showMsg("Đã duyệt"); } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
   };
 
+  const handleTrashImage = async (imageId: string) => {
+    if (!confirm("Xóa phiên bản này?")) return;
+    // Optimistic removal — on failure we reload, so the UI reverts.
+    setImages((prev) => prev.filter((i) => i.id !== imageId));
+    try {
+      await api("/api/posts/images", { action: "trash", image_id: imageId });
+      showMsg("Đã xóa");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Lỗi");
+      loadImages();
+    }
+  };
+
+  const handleAddModel = async () => {
+    if (!modelFile || !modelName.trim()) { setError("Cần ảnh và tên"); return; }
+    setModelUploading(true); setError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(",")[1] || "");
+        r.onerror = () => reject(new Error("Read failed"));
+        r.readAsDataURL(modelFile);
+      });
+      const up = await api("/api/brand-asset/upload", {
+        imageBase64: base64,
+        brand_id: brand.brand_id,
+        asset_type: "model",
+        filename: modelFile.name,
+        content_type: modelFile.type || "image/png",
+      });
+      if (!up?.url) throw new Error("Upload failed");
+
+      const newModel = { id: `model_${Date.now()}`, name: modelName.trim(), photo: up.url, description: modelDesc.trim() };
+      const updatedBrand: BrandConfig = { ...brand, models: [...models, newModel] };
+      await api("/api/brands", { brand: updatedBrand });
+
+      setModels((prev) => [...prev, newModel]);
+      setUseModel(newModel.id);
+      setShowAddModel(false);
+      setModelName(""); setModelDesc(""); setModelFile(null);
+      showMsg("Đã thêm model");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Lỗi");
+    } finally {
+      setModelUploading(false);
+    }
+  };
+
   const doneImages = images.filter((i) => i.status === "done");
 
   return (
@@ -129,16 +188,42 @@ export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId
             {includeLogo ? T.include_logo : "Không gắn logo — AI sẽ được cấm render logo/watermark"}
           </label>
 
-          {brand.models?.length > 0 && (
-            <div>
-              <span className="text-[10px] text-gray-500 uppercase font-semibold">{T.models}</span>
-              <div className="flex gap-2 mt-1 flex-wrap">{brand.models.map((m) => (
+          <div>
+            <span className="text-[10px] text-gray-500 uppercase font-semibold">{T.models}</span>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {models.map((m) => (
                 <button key={m.id} onClick={() => setUseModel(useModel === m.id ? null : m.id)} className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] ${useModel === m.id ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
                   <BrandImage src={m.photo} alt={m.name} className="w-5 h-5 rounded-full object-cover" />{m.name}
                 </button>
-              ))}</div>
+              ))}
+              <button onClick={() => setShowAddModel(true)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-gray-800 text-gray-400 hover:bg-gray-700 border border-dashed border-gray-600">
+                <UserPlus size={10} /> Thêm model
+              </button>
             </div>
-          )}
+            {showAddModel && (
+              <div className="mt-2 p-2.5 bg-gray-800/80 border border-gray-700 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-300 font-semibold">Thêm model mới</span>
+                  <button onClick={() => { setShowAddModel(false); setModelFile(null); setModelName(""); setModelDesc(""); }} className="text-gray-500 hover:text-white"><X size={12} /></button>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setModelFile(e.target.files?.[0] || null)}
+                  className="w-full text-[10px] text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-600 file:text-white file:text-[10px]"
+                />
+                <input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="Tên (VD: Luật sư A)" className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[10px] text-white outline-none" />
+                <input value={modelDesc} onChange={(e) => setModelDesc(e.target.value)} placeholder="Mô tả ngắn (tùy chọn)" className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[10px] text-white outline-none" />
+                <button
+                  onClick={handleAddModel}
+                  disabled={!modelFile || !modelName.trim() || modelUploading}
+                  className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-[10px] rounded flex items-center justify-center gap-1.5"
+                >
+                  {modelUploading ? <><Loader2 className="animate-spin" size={10} /> Đang tải...</> : <><Plus size={10} /> Thêm</>}
+                </button>
+              </div>
+            )}
+          </div>
 
           {brand.references?.length > 0 && (
             <div>
@@ -257,9 +342,17 @@ export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId
                       <button onClick={(e) => { e.stopPropagation(); handleApprove(img.id); }} className="text-[8px] text-blue-400 hover:text-blue-300">Duyệt</button>
                     )}
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(img.r2_url); }} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white text-[7px] px-1.5 py-0.5 rounded">
-                    <Copy size={8} />
-                  </button>
+                  <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100">
+                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(img.r2_url); }} title="Copy URL" className="bg-black/60 text-white p-0.5 rounded hover:bg-black/80"><Copy size={9} /></button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleTrashImage(img.id); }}
+                      disabled={img.approved}
+                      title={img.approved ? "Bỏ duyệt trước khi xóa" : "Xóa phiên bản"}
+                      className="bg-black/60 text-red-300 p-0.5 rounded hover:bg-red-600/50 disabled:opacity-40 disabled:hover:bg-black/60"
+                    >
+                      <Trash2 size={9} />
+                    </button>
+                  </div>
                 </button>
               );
             })}
