@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Wand2, Loader2, FileJson, X } from "lucide-react";
+import { FileJson, X } from "lucide-react";
 import type { BrandConfig } from "@/lib/fb-specs";
-import { CONTENT_TYPES, FB_POST_TYPES } from "@/lib/fb-specs";
 import ImportJsonModal from "@/components/ImportJsonModal";
-import Button from "@/components/ui/Button";
+import PostGeneratorForm, { type GenResult, type GenMeta } from "@/components/content/PostGeneratorForm";
 import { T } from "@/lib/ui-text";
 
 async function api(url: string, body?: unknown) {
@@ -17,18 +16,6 @@ async function api(url: string, body?: unknown) {
   try { const d = JSON.parse(text); if (!res.ok) throw new Error(d.error || "Failed"); return d; } catch (e) { if (e instanceof Error && e.message !== "Failed") throw new Error(`Bad: ${text.slice(0, 80)}`); throw e; }
 }
 
-type GenResult = {
-  title: string;
-  caption_vi?: string;
-  caption_en?: string;
-  headline: string;
-  subline: string;
-  cta: string;
-  image_prompt: string;
-  service_area: string;
-  suggested_date: string;
-};
-
 export default function CreatePostPage() {
   const router = useRouter();
 
@@ -36,14 +23,6 @@ export default function CreatePostPage() {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [contentIdea, setContentIdea] = useState("");
-  const [angle, setAngle] = useState("educational");
-  const [language, setLanguage] = useState<"vi" | "en" | "both">("both");
-  const [postFormat, setPostFormat] = useState("feed-square");
-  const [enableAds, setEnableAds] = useState(false);
-
-  const [generating, setGenerating] = useState(false);
   const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
@@ -55,49 +34,35 @@ export default function CreatePostPage() {
     }).catch(() => setLoading(false));
   }, []);
 
-  const handleGenerate = async () => {
-    if (!brand || !contentIdea.trim()) return;
-    setGenerating(true); setError(null);
+  const handleGenerated = async (gen: GenResult, meta: GenMeta) => {
+    if (!brand) return;
     try {
-      // 1. AI generates a single post's content (title + caption + banner text + image prompt)
-      const gen: GenResult = await api("/api/ai-content", {
-        action: "generate_full_post",
-        brand,
-        topic: contentIdea,
-        post_type: "post",
-        angle,
-        language,
-      });
-
-      // 2. Create the post row in draft state — user edits on /content/[id]
       const post = await api("/api/posts", {
         action: "create",
         post: {
           brand_id: brand.brand_id,
           campaign_id: null,
           title: gen.title,
-          topic: contentIdea,
+          topic: meta.topic,
           caption_vi: gen.caption_vi || "",
           caption_en: gen.caption_en || "",
           text_overlay: { headline: gen.headline || "", subline: gen.subline || "", cta: gen.cta || "" },
           prompt: gen.image_prompt || "",
-          content_type: angle,
+          content_type: meta.angle,
           service_area: gen.service_area || null,
-          language,
-          type: postFormat,
+          language: meta.language,
+          type: meta.postFormat,
           style: "professional",
           status: "draft",
           scheduled_date: gen.suggested_date || null,
-          ads_enabled: enableAds,
+          ads_enabled: meta.adsEnabled,
         },
         created_from: "scratch",
       });
-
       if (!post?.id) throw new Error("Không tạo được bài");
       router.push(`/content/${post.id}?new=1`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Lỗi");
-      setGenerating(false);
     }
   };
 
@@ -137,90 +102,7 @@ export default function CreatePostPage() {
             </div>
           )}
 
-          <div className="bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/20 rounded-xl p-5 space-y-4">
-            <div>
-              <label className="text-xs text-gray-400 font-medium">Ý tưởng nội dung</label>
-              <textarea
-                value={contentIdea}
-                onChange={(e) => setContentIdea(e.target.value)}
-                rows={3}
-                placeholder="Bài đăng về cái gì? VD: Tư vấn thủ tục ly hôn đơn phương cho phụ nữ 25-45 tại TP.HCM..."
-                className="w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 font-medium">Góc nhìn</label>
-              <div className="flex gap-1.5 mt-1 flex-wrap">
-                {CONTENT_TYPES.map((ct) => (
-                  <button
-                    key={ct.value}
-                    onClick={() => setAngle(ct.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition ${
-                      angle === ct.value
-                        ? `${ct.color}/20 text-white ring-1 ring-current`
-                        : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                    }`}
-                  >
-                    {ct.emoji} {ct.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 font-medium">Ngôn ngữ</label>
-              <div className="flex gap-1.5 mt-1">
-                {[{ v: "vi" as const, l: "Tiếng Việt" }, { v: "en" as const, l: "English" }, { v: "both" as const, l: "Cả hai" }].map((o) => (
-                  <button
-                    key={o.v}
-                    onClick={() => setLanguage(o.v)}
-                    className={`px-3 py-1.5 rounded-lg text-xs ${
-                      language === o.v ? "bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                    }`}
-                  >
-                    {o.l}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 font-medium">Định dạng</label>
-              <select
-                value={postFormat}
-                onChange={(e) => setPostFormat(e.target.value)}
-                className="w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                {FB_POST_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label} — {t.width}×{t.height}</option>)}
-              </select>
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={enableAds}
-                onChange={(e) => setEnableAds(e.target.checked)}
-                className="accent-orange-500 w-4 h-4"
-              />
-              <span className="text-xs text-gray-300">Bật chế độ Quảng cáo</span>
-              <span className="text-[10px] text-gray-500">(cấu hình đối tượng, ngân sách, CTA trong màn hình chi tiết)</span>
-            </label>
-
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={handleGenerate}
-              disabled={generating || !contentIdea.trim() || !brand}
-            >
-              {generating ? <><Loader2 className="animate-spin" size={14} /> Đang tạo...</> : <><Wand2 size={14} /> Tạo bài với AI</>}
-            </Button>
-
-            <p className="text-[10px] text-gray-500 text-center">
-              AI sẽ soạn tiêu đề, caption, text banner và mô tả hình. Sau đó bạn chỉnh tiếp ở màn hình chi tiết.
-            </p>
-          </div>
+          {brand && <PostGeneratorForm brand={brand} onGenerated={handleGenerated} />}
 
           <div className="text-center pt-4 border-t border-gray-800/50">
             <button

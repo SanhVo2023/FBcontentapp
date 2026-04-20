@@ -7,12 +7,12 @@ import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
 import { CONTENT_TYPES, POST_STATUSES, SERVICE_AREAS, FB_POST_TYPES } from "@/lib/fb-specs";
 import BrandImage from "@/components/BrandImage";
 import EditableFacebookPost from "@/components/content/EditableFacebookPost";
-import CaptionToolbar from "@/components/content/CaptionToolbar";
-import AIComposerPanel from "@/components/content/AIComposerPanel";
 import ImageGenPanel from "@/components/content/ImageGenPanel";
 import CommentsPanel from "@/components/client/CommentsPanel";
+import RegenerateTextModal from "@/components/content/RegenerateTextModal";
+import type { GenResult } from "@/components/content/PostGeneratorForm";
 import { T } from "@/lib/ui-text";
-import { X, MessageSquare, MessageCircle, ImageIcon, Settings, Send } from "lucide-react";
+import { X, MessageCircle, ImageIcon, Settings, Send, Sparkles } from "lucide-react";
 
 type TagRow = { id: string; brand_id: string; name: string; color: string };
 type PostImageRow = { id: string; post_id: string; variant_type: string; r2_url: string; status: string; created_at: string; version?: number; approved?: boolean };
@@ -25,7 +25,7 @@ async function api(url: string, body?: unknown) {
   try { const d = JSON.parse(text); if (!res.ok) throw new Error(d.error || "Failed"); return d; } catch (e) { if (e instanceof Error && e.message !== "Failed") throw new Error(`Bad: ${text.slice(0, 80)}`); throw e; }
 }
 
-type DrawerMode = "caption" | "image" | "settings" | "comments" | null;
+type DrawerMode = "image" | "settings" | "comments" | null;
 
 export default function PostDetailPage() {
   const params = useParams();
@@ -81,6 +81,7 @@ export default function PostDetailPage() {
   const [submittingClient, setSubmittingClient] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [showRegen, setShowRegen] = useState(false);
 
   const viTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const enTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -138,11 +139,12 @@ export default function PostDetailPage() {
     })();
   }, [postId]);
 
-  // Freshly-created posts land with ?new=1 — open the caption drawer so the
-  // "click to edit" affordance is visible immediately.
+  // Freshly-created posts land with ?new=1 — open the image drawer since
+  // the caption is already AI-generated; the next user action is usually
+  // to kick off image generation.
   useEffect(() => {
     if (searchParams.get("new") === "1" && !loading) {
-      setDrawerMode("caption");
+      setDrawerMode("image");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -200,7 +202,7 @@ export default function PostDetailPage() {
   };
 
   const handleCaptionClick = () => {
-    setDrawerMode("caption");
+    // Click on the FB mockup caption → inline edit. No drawer side-effect.
     setEditingCaption(true);
   };
 
@@ -212,6 +214,15 @@ export default function PostDetailPage() {
   const handleSettingsClick = () => {
     setDrawerMode("settings");
     setEditingCaption(false);
+  };
+
+  const handleRegenApply = (result: GenResult) => {
+    if (result.caption_vi !== undefined) setCaptionVi(result.caption_vi || "");
+    if (result.caption_en !== undefined) setCaptionEn(result.caption_en || "");
+    setHeadline(result.headline || "");
+    setSubline(result.subline || "");
+    setCta(result.cta || "");
+    showMsg("✨ Đã tạo lại nội dung");
   };
 
   const handleAddTag = async (tagId: string) => { await api("/api/tags", { action: "add_to_post", post_id: postId, tag_id: tagId }); const tag = allTags.find((t) => t.id === tagId); if (tag) setPostTags((prev) => [...prev, tag]); };
@@ -238,21 +249,6 @@ export default function PostDetailPage() {
       showMsg("Đã gửi cho khách duyệt");
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Gửi thất bại"); }
     finally { setSubmittingClient(false); }
-  };
-
-  const handleComposed = (result: { caption_vi?: string; caption_en?: string; headline: string; subline: string; cta: string; hashtags: string }) => {
-    if (result.caption_vi !== undefined) {
-      const final = result.hashtags && !result.caption_vi.includes("#") ? `${result.caption_vi}\n\n${result.hashtags}` : result.caption_vi;
-      setCaptionVi(final);
-    }
-    if (result.caption_en !== undefined) {
-      const final = result.hashtags && !result.caption_en.includes("#") ? `${result.caption_en}\n\n${result.hashtags}` : result.caption_en;
-      setCaptionEn(final);
-    }
-    if (result.headline) setHeadline(result.headline);
-    if (result.subline) setSubline(result.subline);
-    if (result.cta) setCta(result.cta);
-    showMsg("✨ Đã soạn");
   };
 
   const handleImageUploaded = async () => {
@@ -298,9 +294,11 @@ export default function PostDetailPage() {
           className="bg-transparent text-sm font-medium text-white outline-none border-b border-transparent focus:border-blue-500 px-1 max-w-[240px]"
         />
 
-        {/* Drawer mode tabs (desktop) */}
+        {/* Drawer tabs — caption drawer removed; inline edit on the mockup handles text */}
         <div className="ml-2 hidden md:flex items-center gap-1 border-l border-gray-800 pl-2">
-          <button onClick={() => setDrawerMode("caption")} title="Soạn caption" className={`p-1.5 rounded transition ${drawerMode === "caption" ? "bg-blue-500/20 text-blue-400" : "text-gray-500 hover:text-white"}`}><MessageSquare size={14} /></button>
+          <button onClick={() => setShowRegen(true)} title="Tạo lại nội dung bằng AI" className="px-2 py-1 rounded transition inline-flex items-center gap-1 text-[11px] text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30">
+            <Sparkles size={12} /> Tạo lại nội dung
+          </button>
           <button onClick={() => setDrawerMode("image")} title="Tạo hình" className={`p-1.5 rounded transition ${drawerMode === "image" ? "bg-purple-500/20 text-purple-400" : "text-gray-500 hover:text-white"}`}><ImageIcon size={14} /></button>
           <button onClick={handleSettingsClick} title="Cài đặt" className={`p-1.5 rounded transition ${drawerMode === "settings" ? "bg-amber-500/20 text-amber-400" : "text-gray-500 hover:text-white"}`}><Settings size={14} /></button>
           <button onClick={() => setDrawerMode("comments")} title="Bình luận" className={`p-1.5 rounded transition relative ${drawerMode === "comments" ? "bg-green-500/20 text-green-400" : "text-gray-500 hover:text-white"}`}>
@@ -374,7 +372,7 @@ export default function PostDetailPage() {
             imageUrl={previewImageUrl}
             onCaptionClick={handleCaptionClick}
             onImageClick={handleImageClick}
-            editingCaption={editingCaption && drawerMode === "caption"}
+            editingCaption={editingCaption}
             onCaptionChange={setCurrentCaption}
             captionTextareaRef={currentTextareaRef}
             onCaptionBlur={handleCaptionBlur}
@@ -386,8 +384,8 @@ export default function PostDetailPage() {
 
           {/* Quick access tiny toolbar below post */}
           <div className="max-w-[540px] mx-auto mt-4 flex items-center justify-center gap-2 flex-wrap">
-            <button onClick={() => setDrawerMode("caption")} className="px-3 py-1.5 bg-gray-900 border border-gray-800 text-gray-300 text-[11px] rounded-lg hover:bg-gray-800 flex items-center gap-1.5">
-              <MessageSquare size={12} /> Soạn nội dung
+            <button onClick={() => setShowRegen(true)} className="px-3 py-1.5 bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[11px] rounded-lg hover:bg-purple-500/20 flex items-center gap-1.5">
+              <Sparkles size={12} /> Tạo lại nội dung
             </button>
             <button onClick={() => setDrawerMode("image")} className="px-3 py-1.5 bg-gray-900 border border-gray-800 text-gray-300 text-[11px] rounded-lg hover:bg-gray-800 flex items-center gap-1.5">
               <ImageIcon size={12} /> Tạo hình
@@ -403,56 +401,12 @@ export default function PostDetailPage() {
           <div className={`${drawerMode ? "block" : "hidden"} w-full md:w-[420px] md:border-l border-gray-800 overflow-y-auto bg-gray-950 shrink-0`}>
             <div className="sticky top-0 bg-gray-950 border-b border-gray-800 px-4 py-2 flex items-center gap-2 z-10">
               <span className="text-xs font-semibold text-gray-300">
-                {drawerMode === "caption" ? "📝 Soạn nội dung" : drawerMode === "image" ? "🎨 Tạo hình ảnh" : drawerMode === "comments" ? "💬 Bình luận" : "⚙️ Cài đặt"}
+                {drawerMode === "image" ? "🎨 Tạo hình ảnh" : drawerMode === "comments" ? "💬 Bình luận" : "⚙️ Cài đặt"}
               </span>
               <button onClick={() => { setDrawerMode(null); setEditingCaption(false); }} className="ml-auto text-gray-500 hover:text-white p-1"><X size={14} /></button>
             </div>
 
             <div className="p-4 space-y-3">
-              {drawerMode === "caption" && (
-                <>
-                  <AIComposerPanel
-                    brand={brand}
-                    language={language}
-                    topic={topic || title}
-                    onComposed={handleComposed}
-                  />
-
-                  {/* Caption editor */}
-                  <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] text-gray-500 uppercase font-medium">
-                        {displayLanguage === "vi" ? T.caption_vi : T.caption_en}
-                      </label>
-                      {language === "both" && (
-                        <div className="flex gap-1">
-                          <button onClick={() => setDisplayLanguage("vi")} className={`px-2 py-0.5 text-[10px] rounded ${displayLanguage === "vi" ? "bg-blue-600/30 text-blue-400" : "text-gray-500"}`}>VI</button>
-                          <button onClick={() => setDisplayLanguage("en")} className={`px-2 py-0.5 text-[10px] rounded ${displayLanguage === "en" ? "bg-blue-600/30 text-blue-400" : "text-gray-500"}`}>EN</button>
-                        </div>
-                      )}
-                    </div>
-                    <CaptionToolbar value={currentCaption} onChange={setCurrentCaption} textareaRef={currentTextareaRef} brand={brand} language={displayLanguage} />
-                    <textarea
-                      ref={currentTextareaRef}
-                      value={currentCaption}
-                      onChange={(e) => setCurrentCaption(e.target.value)}
-                      rows={10}
-                      placeholder={displayLanguage === "vi" ? "Nhập caption tiếng Việt..." : "Enter English caption..."}
-                      className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white resize-y outline-none focus:border-blue-500/50 leading-relaxed font-mono"
-                    />
-                    <div className="text-right text-[9px] text-gray-600">{currentCaption.length} ký tự</div>
-                  </div>
-
-                  {/* Banner text */}
-                  <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-2">
-                    <label className="text-[10px] text-gray-500 uppercase font-medium">{T.banner_text}</label>
-                    <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder={T.headline} className="w-full bg-gray-900 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold outline-none" />
-                    <input value={subline} onChange={(e) => setSubline(e.target.value)} placeholder={T.subline} className="w-full bg-gray-900 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none" />
-                    <input value={cta} onChange={(e) => setCta(e.target.value)} placeholder={T.cta} className="w-full bg-gray-900 border border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-blue-400 outline-none" />
-                  </div>
-                </>
-              )}
-
               {drawerMode === "image" && brand && post && (
                 <ImageGenPanel
                   post={post}
@@ -460,6 +414,14 @@ export default function PostDetailPage() {
                   onUploaded={handleImageUploaded}
                   selectedImageId={selectedImageId}
                   onSelectImage={(img) => setSelectedImageId(img.id)}
+                  overlayHeadline={headline}
+                  overlaySubline={subline}
+                  overlayCta={cta}
+                  onOverlayChange={(updates) => {
+                    if (updates.headline !== undefined) setHeadline(updates.headline);
+                    if (updates.subline !== undefined) setSubline(updates.subline);
+                    if (updates.cta !== undefined) setCta(updates.cta);
+                  }}
                 />
               )}
 
@@ -580,6 +542,19 @@ export default function PostDetailPage() {
           </div>
         )}
       </div>
+
+      {showRegen && brand && (
+        <RegenerateTextModal
+          brand={brand}
+          initial={{
+            topic: topic || title,
+            angle: contentType || "educational",
+            language,
+          }}
+          onApply={handleRegenApply}
+          onClose={() => setShowRegen(false)}
+        />
+      )}
     </div>
   );
 }

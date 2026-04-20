@@ -16,6 +16,11 @@ type Props = {
   selectedImageId?: string | null;
   /** Called when user clicks a version to view it */
   onSelectImage?: (img: PostImageRow) => void;
+  /** Optional controlled banner overlay — when present, edits bubble up to the parent's post state (autosave) */
+  overlayHeadline?: string;
+  overlaySubline?: string;
+  overlayCta?: string;
+  onOverlayChange?: (updates: { headline?: string; subline?: string; cta?: string }) => void;
 };
 
 async function api(url: string, body?: unknown) {
@@ -26,13 +31,29 @@ async function api(url: string, body?: unknown) {
   try { const d = JSON.parse(text); if (!res.ok) throw new Error(d.error || "Failed"); return d; } catch (e) { if (e instanceof Error && e.message !== "Failed") throw new Error(`Bad: ${text.slice(0, 100)}`); throw e; }
 }
 
-export default function ImageGenPanel({ post, brand, onUploaded, selectedImageId, onSelectImage }: Props) {
+export default function ImageGenPanel({
+  post, brand, onUploaded, selectedImageId, onSelectImage,
+  overlayHeadline, overlaySubline, overlayCta, onOverlayChange,
+}: Props) {
   const [postType, setPostType] = useState<PostType>(post.type || "feed-square");
   const [style, setStyle] = useState(post.style || "professional");
   const [prompt, setPrompt] = useState(post.prompt || "");
-  const [headline, setHeadline] = useState(post.text_overlay?.headline || "");
-  const [subline, setSubline] = useState(post.text_overlay?.subline || "");
-  const [cta, setCta] = useState(post.text_overlay?.cta || "");
+  // Overlay fields: local fallback state; controlled by parent when overlay* props are passed
+  const [localHeadline, setLocalHeadline] = useState(post.text_overlay?.headline || "");
+  const [localSubline, setLocalSubline] = useState(post.text_overlay?.subline || "");
+  const [localCta, setLocalCta] = useState(post.text_overlay?.cta || "");
+  const headline = overlayHeadline ?? localHeadline;
+  const subline = overlaySubline ?? localSubline;
+  const cta = overlayCta ?? localCta;
+  const setHeadline = (v: string) => {
+    if (onOverlayChange) onOverlayChange({ headline: v }); else setLocalHeadline(v);
+  };
+  const setSubline = (v: string) => {
+    if (onOverlayChange) onOverlayChange({ subline: v }); else setLocalSubline(v);
+  };
+  const setCta = (v: string) => {
+    if (onOverlayChange) onOverlayChange({ cta: v }); else setLocalCta(v);
+  };
   const [useModel, setUseModel] = useState<string | null>(post.use_model || null);
   const [useRef, setUseRef] = useState<string | null>(post.use_reference || null);
   const [includeLogo, setIncludeLogo] = useState(true);

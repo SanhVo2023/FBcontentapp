@@ -43,10 +43,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ prompt });
       }
       case "generate_full_post": {
-        const result = await generateFullPost(
-          body.topic as string, body.post_type as string || "post",
-          body.angle as string || "educational", body.language as string || "both", brand
-        );
+        const result = await generateFullPost({
+          topic: body.topic as string,
+          postType: (body.post_type as string) || "post",
+          angle: (body.angle as string) || "educational",
+          language: ((body.language as string) || "both") as "vi" | "en" | "both",
+          brand,
+          samples: Array.isArray(body.samples) ? (body.samples as string[]) : undefined,
+          facts: (body.facts as string) || undefined,
+        });
         return NextResponse.json(result);
       }
       case "compose_post": {

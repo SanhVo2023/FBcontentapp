@@ -203,13 +203,31 @@ Return ONLY the prompt text, no JSON, no quotes.`);
   return result.response.text().trim();
 }
 
-export async function generateFullPost(
-  topic: string, postType: string, angle: string, language: string, brand: BrandConfig
-): Promise<{
-  title: string; caption_vi?: string; caption_en?: string;
-  headline: string; subline: string; cta: string;
-  image_prompt: string; service_area: string; suggested_date: string;
-}> {
+export type GenerateFullPostInput = {
+  topic: string;
+  postType: string;
+  angle: string;
+  language: "vi" | "en" | "both";
+  brand: BrandConfig;
+  samples?: string[]; // style reference posts ("preference")
+  facts?: string;     // grounding document/context
+};
+
+export type GenerateFullPostOutput = {
+  title: string;
+  caption_vi?: string;
+  caption_en?: string;
+  headline: string;
+  subline: string;
+  cta: string;
+  image_prompt: string;
+  service_area: string;
+  suggested_date: string;
+};
+
+export async function generateFullPost(input: GenerateFullPostInput): Promise<GenerateFullPostOutput> {
+  const { topic, postType, angle, language, brand, samples, facts } = input;
+
   const langInst = language === "both" ? "Generate BOTH Vietnamese and English captions."
     : language === "vi" ? "Vietnamese caption only." : "English caption only.";
 
@@ -219,6 +237,21 @@ export async function generateFullPost(
     return d.toISOString().slice(0, 10);
   })();
 
+  const cleanSamples = (samples || []).map((s) => s.trim()).filter(Boolean);
+  const samplesBlock = cleanSamples.length
+    ? `\n## STYLE REFERENCE SAMPLES
+Match the structure, rhythm, emoji usage, bullet patterns, section separators, and CTA voice of these samples when writing the caption. Do NOT copy their topic — only imitate the SHAPE and VOICE.
+
+${cleanSamples.map((s, i) => `--- SAMPLE ${i + 1} ---\n${s}`).join("\n\n")}\n`
+    : "";
+
+  const factsBlock = facts && facts.trim()
+    ? `\n## FACTS & DETAILS (grounding)
+Ground every concrete claim (numbers, names, prices, legal references, dates, contact info) in the facts below. Do NOT invent facts.
+
+${facts.trim()}\n`
+    : "";
+
   const result = await heavy.generateContent(`You are a Facebook content creator for a Vietnamese law firm.
 
 ${brandContext(brand)}
@@ -226,12 +259,12 @@ ${viStyleBlock(language)}
 Create a complete Facebook ${postType} about: "${topic}"
 Content angle: ${angle}
 ${langInst}
-
+${samplesBlock}${factsBlock}
 Return ONLY JSON:
 {
   "title": "Short title (under 10 words)",
-  ${language !== "en" ? '"caption_vi": "Vietnamese Facebook caption. 3-5 sentences. Engaging, legal references, end with CTA.",' : ""}
-  ${language !== "vi" ? '"caption_en": "English Facebook caption. 3-5 sentences. Engaging, end with CTA.",' : ""}
+  ${language !== "en" ? '"caption_vi": "Vietnamese Facebook caption — full-length, following the style of the samples if provided. End with a CTA and contact block when appropriate.",' : ""}
+  ${language !== "vi" ? '"caption_en": "English Facebook caption — full-length, following the style of the samples if provided. End with a CTA and contact block when appropriate.",' : ""}
   "headline": "BANNER HEADLINE (max 6 words, uppercase)",
   "subline": "Supporting text (max 12 words)",
   "cta": "CTA text (max 3 words)",
