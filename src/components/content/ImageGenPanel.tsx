@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, Download, UserPlus, X } from "lucide-react";
 import type { BrandConfig, PostConfig, PostType } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
 import BrandImage from "@/components/BrandImage";
+import { downloadImage } from "@/lib/download";
 import { T } from "@/lib/ui-text";
 
 type Props = {
@@ -364,7 +365,18 @@ export default function ImageGenPanel({
                     )}
                   </div>
                   <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100">
-                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(img.r2_url); }} title="Copy URL" className="bg-black/60 text-white p-0.5 rounded hover:bg-black/80"><Copy size={9} /></button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const name = `${post.title || post.id}-${img.variant_type}-v${img.version}.png`.replace(/[^\w.-]+/g, "_");
+                        downloadImage(img.r2_url, name).catch(() => setError("Tải ảnh thất bại"));
+                      }}
+                      title="Tải ảnh về máy"
+                      className="bg-black/60 text-white p-0.5 rounded hover:bg-black/80"
+                    >
+                      <Download size={9} />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(img.r2_url); showMsg("Đã copy URL"); }} title="Copy URL" className="bg-black/60 text-white p-0.5 rounded hover:bg-black/80"><Copy size={9} /></button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleTrashImage(img.id); }}
                       disabled={img.approved}
