@@ -31,7 +31,7 @@ export async function generateImageSeedream(input: {
   image?: string | string[]; // optional — base64 or URL; we don't pass this from creative mode
 }): Promise<{ buffer: Buffer; mimeType: string }> {
   const key = process.env.ARK_API_KEY;
-  if (!key) throw new Error("ARK_API_KEY chưa cấu hình (Netlify env / .env.local)");
+  if (!key) throw new Error("ARK_API_KEY chưa cấu hình — thêm vào Netlify env và .env.local");
 
   const outputFormat = input.outputFormat || "png";
   const size = input.size || "2K";
@@ -42,6 +42,9 @@ export async function generateImageSeedream(input: {
     size,
     output_format: outputFormat,
     watermark: false,
+    // Ask Seedream for inline base64 whenever possible — avoids a second
+    // round-trip to a CDN URL that might be region-locked or short-lived.
+    response_format: "b64_json",
   };
   if (input.image) body.image = input.image;
 
@@ -56,6 +59,9 @@ export async function generateImageSeedream(input: {
 
   const text = await res.text();
   if (!res.ok) {
+    // Surface the raw response body to server logs so we can debug failures
+    // that don't match ArkError's shape.
+    console.error("[seedream] HTTP", res.status, "response:", text.slice(0, 500));
     let msg = `Seedream HTTP ${res.status}`;
     try {
       const j = JSON.parse(text) as ArkError;
@@ -64,23 +70,31 @@ export async function generateImageSeedream(input: {
     throw new Error(msg);
   }
 
-  const json = JSON.parse(text) as ArkSuccess;
+  let json: ArkSuccess;
+  try {
+    json = JSON.parse(text) as ArkSuccess;
+  } catch {
+    console.error("[seedream] non-JSON response:", text.slice(0, 500));
+    throw new Error("Seedream trả về phản hồi không hợp lệ");
+  }
 
   // Pull the first image out of the union of shapes Seedream can return.
   let imageUrl: string | undefined;
   let inlineB64: string | undefined;
 
   if (json.image_url) imageUrl = json.image_url;
-  else if (json.data?.length) {
-    imageUrl = json.data[0].url;
-    inlineB64 = json.data[0].b64_json;
-  } else if (json.images?.length) {
+  if (json.data?.length) {
+    imageUrl = imageUrl || json.data[0].url;
+    inlineB64 = inlineB64 || json.data[0].b64_json;
+  }
+  if (json.images?.length) {
     const first = json.images[0];
-    if (typeof first === "string") imageUrl = first;
-    else { imageUrl = first.url; inlineB64 = first.b64_json; }
+    if (typeof first === "string") imageUrl = imageUrl || first;
+    else { imageUrl = imageUrl || first.url; inlineB64 = inlineB64 || first.b64_json; }
   }
 
   if (!imageUrl && !inlineB64) {
+    console.error("[seedream] unexpected success shape:", text.slice(0, 500));
     throw new Error("Seedream trả về không có ảnh");
   }
 
@@ -90,9 +104,12 @@ export async function generateImageSeedream(input: {
     return { buffer: Buffer.from(inlineB64, "base64"), mimeType };
   }
 
-  // Fetch the hosted image → bytes
+  // Fallback: fetch the hosted image → bytes.
   const imgRes = await fetch(imageUrl!);
-  if (!imgRes.ok) throw new Error(`Seedream image fetch HTTP ${imgRes.status}`);
+  if (!imgRes.ok) {
+    console.error("[seedream] image fetch failed", imgRes.status, imageUrl);
+    throw new Error(`Seedream image fetch HTTP ${imgRes.status}`);
+  }
   const arrayBuf = await imgRes.arrayBuffer();
   return { buffer: Buffer.from(arrayBuf), mimeType };
 }

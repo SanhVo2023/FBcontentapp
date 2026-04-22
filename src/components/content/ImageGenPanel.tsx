@@ -129,6 +129,9 @@ export default function ImageGenPanel({
     const dd = mode === "creative" && hasDD ? designDirection : null;
     setPendingVariants((prev) => [...prev, ...types]);
 
+    // Collect per-variant errors so the user sees *why* a generation failed
+    // instead of just a vanished skeleton tile.
+    const errs: string[] = [];
     await Promise.allSettled(types.map(async (type) => {
       try {
         const postPayload: PostConfig = {
@@ -153,13 +156,16 @@ export default function ImageGenPanel({
           const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
           if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
         }
-      } catch { /* per-variant error swallowed so other variants proceed */ }
+      } catch (err: unknown) {
+        errs.push(`${type}: ${err instanceof Error ? err.message : "Lỗi"}`);
+      }
       finally {
         setPendingVariants((p) => { const idx = p.indexOf(type); if (idx === -1) return p; const next = p.slice(); next.splice(idx, 1); return next; });
         loadImages();
       }
     }));
-    showMsg("✨ Đã tạo xong");
+    if (errs.length) setError(errs.join(" • "));
+    else showMsg("✨ Đã tạo xong");
   };
 
   const handlePickCreativeFile = async (file: File) => {

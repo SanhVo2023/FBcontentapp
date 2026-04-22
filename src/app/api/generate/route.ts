@@ -109,6 +109,9 @@ export async function POST(req: NextRequest) {
       provider,
     });
   } catch (e: unknown) {
+    // Log full error server-side (shows in Netlify function logs) and return
+    // a clean message to the client so the UI can display what went wrong.
+    console.error("[/api/generate] failed:", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
   }
 }
