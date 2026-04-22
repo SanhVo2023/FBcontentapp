@@ -21,7 +21,7 @@ const ARK_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generatio
 //   - Aspect ratio must be within [1/16, 16]
 //   - Preset "2K" / "4K" also accepted; we use explicit dimensions to pin
 //     the aspect ratio per FB post type.
-const MODEL_ID = "seedream-4-5";
+const MODEL_ID = "seedream-4-5-251128";
 
 export type SeedreamFormat = "png" | "jpeg";
 
