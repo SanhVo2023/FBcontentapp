@@ -95,40 +95,44 @@ export default function ImageGenPanel({
 
   const toggleVariant = (v: string) => setVariants((p) => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; });
 
+  // Parallel-friendly: the main Generate button stays enabled; clicking it
+  // again while variants are in flight just appends more to the pending list.
+  // The per-variant skeleton tiles signal progress; the button itself shows
+  // only a small pending count, not a disabled state.
   const handleGenerate = async () => {
     if (!prompt.trim()) { setError("Nhập mô tả hình ảnh"); return; }
     if (variants.size === 0) { setError("Chọn ít nhất 1 định dạng"); return; }
     setError(null);
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
     const types = Array.from(variants);
-    setPendingVariants(types);
+    // Append to pending so concurrent batches can coexist without wiping each other.
+    setPendingVariants((prev) => [...prev, ...types]);
 
-    try {
-      for (const type of types) {
-        try {
-          const postPayload: PostConfig = {
-            ...post,
-            id: post.id,
-            type: type as PostConfig["type"],
-            prompt,
-            text_overlay: { headline, subline, cta },
-            use_model: useModel,
-            use_reference: useRef,
-            style,
-          };
-          const data = await api("/api/generate", { post: postPayload, brand: brandWithLogo, testMode: false, includeLogo });
-          if (data?.imageBase64) {
-            const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
-            if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
-          }
-        } catch { /* skip this variant; continue others */ }
-        // Remove this variant from pending list as soon as it finishes
-        setPendingVariants((p) => p.filter((t) => t !== type));
-        await loadImages();
+    // Run all types in parallel — gemini serializes on its side, we don't need a for-await loop
+    await Promise.allSettled(types.map(async (type) => {
+      try {
+        const postPayload: PostConfig = {
+          ...post,
+          id: post.id,
+          type: type as PostConfig["type"],
+          prompt,
+          text_overlay: { headline, subline, cta },
+          use_model: useModel,
+          use_reference: useRef,
+          style,
+        };
+        const data = await api("/api/generate", { post: postPayload, brand: brandWithLogo, testMode: false, includeLogo });
+        if (data?.imageBase64) {
+          const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
+          if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
+        }
+      } catch { /* per-variant error swallowed so other variants proceed */ }
+      finally {
+        setPendingVariants((p) => { const idx = p.indexOf(type); if (idx === -1) return p; const next = p.slice(); next.splice(idx, 1); return next; });
+        loadImages();
       }
-      showMsg("✨ Đã tạo xong");
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi"); }
-    finally { setPendingVariants([]); }
+    }));
+    showMsg("✨ Đã tạo xong");
   };
 
   const handleApprove = async (imageId: string) => {
@@ -309,15 +313,18 @@ export default function ImageGenPanel({
       {/* Generate — always available; generates new versions every time */}
       <button
         onClick={handleGenerate}
-        disabled={loading || !prompt.trim()}
+        disabled={!prompt.trim() || variants.size === 0}
         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition"
       >
-        {loading ? (
-          <><Loader2 className="animate-spin" size={14} /> Đang tạo {pendingVariants.length} định dạng...</>
-        ) : doneImages.length === 0 ? (
+        {doneImages.length === 0 ? (
           <><ImageIcon size={14} /> Tạo hình ({variants.size}) {spec.width}x{spec.height}</>
         ) : (
           <><Plus size={14} /> Tạo thêm phiên bản ({variants.size})</>
+        )}
+        {loading && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/30 rounded text-[10px] font-normal">
+            <Loader2 className="animate-spin" size={10} /> +{pendingVariants.length} đang chạy
+          </span>
         )}
       </button>
 

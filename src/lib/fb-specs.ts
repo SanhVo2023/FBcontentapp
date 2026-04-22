@@ -172,7 +172,7 @@ export const SERVICE_AREAS = [
 export const POST_STATUSES = [
   { value: "draft", label: "Nháp", color: "bg-gray-500" },
   { value: "review", label: "Review", color: "bg-yellow-500" },
-  { value: "submitted", label: "Đã gửi Sheet", color: "bg-teal-500" },
+  { value: "submitted", label: "Đã gửi khách", color: "bg-teal-500" },
   { value: "approved", label: "Đã duyệt", color: "bg-green-500" },
   { value: "images_pending", label: "Images Pending", color: "bg-purple-500" },
   { value: "images_done", label: "Images Done", color: "bg-indigo-500" },
@@ -181,28 +181,40 @@ export const POST_STATUSES = [
   { value: "trashed", label: "Thùng rác", color: "bg-red-500" },
 ];
 
-// Kanban simplified 3-column grouping
-export const KANBAN_COLUMNS = [
-  { key: "draft" as const, label: "Nháp", color: "bg-gray-500", dotColor: "#6B7280" },
-  { key: "submitted" as const, label: "Đã gửi", color: "bg-teal-500", dotColor: "#14B8A6" },
-  { key: "approved" as const, label: "Đã duyệt", color: "bg-green-500", dotColor: "#10B981" },
+export type KanbanKey = "draft" | "submitted" | "approved" | "published";
+
+// Kanban simplified 4-column grouping — creator + client both derive
+// their buckets from `status` so labels line up on both sides.
+export const KANBAN_COLUMNS: Array<{ key: KanbanKey; label: string; color: string; dotColor: string }> = [
+  { key: "draft",     label: "Nháp",      color: "bg-gray-500",    dotColor: "#6B7280" },
+  { key: "submitted", label: "Chờ khách", color: "bg-teal-500",    dotColor: "#14B8A6" },
+  { key: "approved",  label: "Đã duyệt",  color: "bg-green-500",   dotColor: "#10B981" },
+  { key: "published", label: "Đã đăng",   color: "bg-emerald-600", dotColor: "#059669" },
 ];
 
-export const KANBAN_STATUS_GROUPS: Record<"draft" | "submitted" | "approved", string[]> = {
+export const KANBAN_STATUS_GROUPS: Record<KanbanKey, string[]> = {
   draft: ["draft", "review", "images_pending", "images_done"],
   submitted: ["submitted"],
-  approved: ["approved", "scheduled", "published"],
+  approved: ["approved", "scheduled"],
+  published: ["published"],
 };
 
-export function getKanbanColumn(status: string): "draft" | "submitted" | "approved" | null {
+export function getKanbanColumn(status: string): KanbanKey | null {
   for (const [col, statuses] of Object.entries(KANBAN_STATUS_GROUPS)) {
-    if (statuses.includes(status)) return col as "draft" | "submitted" | "approved";
+    if (statuses.includes(status)) return col as KanbanKey;
   }
   return null;
 }
 
 export function isLegacyDraftStatus(status: string): boolean {
   return ["review", "images_pending", "images_done"].includes(status);
+}
+
+// Derived "late" state — scheduled_date is in the past and the post hasn't been published yet.
+// Pure render-time helper so there's no status column to maintain.
+export function isPostLate(post: { status: string; scheduled_date?: string }): boolean {
+  if (!post.scheduled_date || post.status === "published") return false;
+  return post.scheduled_date < new Date().toISOString().slice(0, 10);
 }
 
 export type PostManifest = {

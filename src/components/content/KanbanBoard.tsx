@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
+import type { BrandConfig, PostConfig, KanbanKey } from "@/lib/fb-specs";
 import { KANBAN_COLUMNS, getKanbanColumn } from "@/lib/fb-specs";
 import KanbanColumn from "./KanbanColumn";
 import PostCard from "./PostCard";
-
-type KanbanKey = "draft" | "submitted" | "approved";
 
 type Props = {
   postsByStatus: Record<string, PostConfig[]>;
@@ -16,11 +14,11 @@ type Props = {
   onAction: (action: string, postId: string, extra?: Record<string, unknown>) => void;
 };
 
-// Column tooltip labels — help users understand what each column means post-Sheet removal.
 const COLUMN_TOOLTIPS: Record<KanbanKey, string> = {
   draft: "Đang soạn — chưa gửi khách",
   submitted: "Đang chờ khách duyệt",
   approved: "Khách đã duyệt",
+  published: "Đã đăng lên Facebook",
 };
 
 export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBrand, onAction }: Props) {
@@ -32,7 +30,7 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
   const [toast, setToast] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
-    const buckets: Record<KanbanKey, PostConfig[]> = { draft: [], submitted: [], approved: [] };
+    const buckets: Record<KanbanKey, PostConfig[]> = { draft: [], submitted: [], approved: [], published: [] };
     for (const posts of Object.values(postsByStatus)) {
       for (const p of posts) {
         const col = getKanbanColumn(p.status);
@@ -102,12 +100,13 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
     }
     if (!post) return;
 
-    // Only the client can push a post to Approved — we don't let creators self-approve.
-    if (toColumn === "approved") {
+    // Creator can't self-approve — only the client approves via the /client portal.
+    if (toColumn === "approved" && from !== "published") {
       showToast("Chỉ khách duyệt mới chuyển bài sang Đã duyệt");
       return;
     }
 
+    // Draft → Submitted: gate on having caption + image.
     if (toColumn === "submitted" && from === "draft") {
       const hasCaption = !!(post.caption_vi?.trim() || post.caption_en?.trim());
       const hasImage = !!thumbnails[post.id];
@@ -123,12 +122,31 @@ export default function KanbanBoard({ postsByStatus, thumbnails, brands, showBra
       return;
     }
 
-    if (toColumn === "draft" && (from === "submitted" || from === "approved")) {
+    // Approved → Published: creator marks post as live on FB.
+    if (toColumn === "published" && from === "approved") {
+      onAction("update", postId, { status: "published" });
+      return;
+    }
+
+    // Published → Approved: unpublish (e.g. accidental publish).
+    if (toColumn === "approved" && from === "published") {
+      onAction("update", postId, { status: "approved" });
+      return;
+    }
+
+    // Any → Draft: manual revert.
+    if (toColumn === "draft" && (from === "submitted" || from === "approved" || from === "published")) {
       onAction("update", postId, { status: "draft" });
       return;
     }
 
-    if (toColumn === "submitted" && from === "approved") {
+    // Submitted ↔ published or published ← submitted: block, must approve first.
+    if (toColumn === "published" && from !== "approved") {
+      showToast("Phải duyệt trước khi đăng");
+      return;
+    }
+
+    if (toColumn === "submitted" && (from === "approved" || from === "published")) {
       showToast("Bài đã duyệt — không cần gửi lại");
       return;
     }

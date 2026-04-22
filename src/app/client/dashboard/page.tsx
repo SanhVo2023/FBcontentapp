@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LogOut, MessageSquare, Image as ImageIcon, List, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { PostConfig } from "@/lib/fb-specs";
+import { isPostLate } from "@/lib/fb-specs";
 
 type ClientPostsResponse = {
   posts: PostConfig[];
@@ -13,21 +14,20 @@ type ClientPostsResponse = {
 };
 
 type View = "list" | "calendar";
+type Bucket = "submitted" | "approved" | "published";
 
-const COLS = [
-  { key: "pending", label: "⏳ Chờ duyệt" },
-  { key: "approved", label: "✓ Đã duyệt" },
-  { key: "revision", label: "⚠️ Cần sửa" },
-] as const;
+// Client buckets mirror creator kanban — both sides derive from `status`
+// so a post lives in the same conceptual column on either view.
+const COLS: Array<{ key: Bucket; label: string }> = [
+  { key: "submitted", label: "⏳ Chờ bạn duyệt" },
+  { key: "approved",  label: "✓ Đã duyệt" },
+  { key: "published", label: "🚀 Đã đăng" },
+];
 
-function bucketOf(post: PostConfig): "pending" | "approved" | "revision" {
-  const vt = post.client_verify_text || "pending";
-  const vi = post.client_verify_image || "pending";
-  const va = post.client_verify_ads || "pending";
-  const adsRelevant = !!post.ads_enabled;
-  if (vt === "approved" && vi === "approved" && (!adsRelevant || va === "approved")) return "approved";
-  if (vt === "rejected" || vi === "rejected" || vt === "revise" || vi === "revise" || va === "rejected" || va === "revise") return "revision";
-  return "pending";
+function bucketOf(post: PostConfig): Bucket {
+  if (post.status === "published") return "published";
+  if (post.status === "approved")  return "approved";
+  return "submitted"; // /api/client-posts already filters out draft & trashed
 }
 
 export default function ClientDashboardPage() {
@@ -74,7 +74,7 @@ function ClientDashboardInner() {
   };
 
   const grouped = useMemo(() => {
-    const g: Record<"pending" | "approved" | "revision", PostConfig[]> = { pending: [], approved: [], revision: [] };
+    const g: Record<Bucket, PostConfig[]> = { submitted: [], approved: [], published: [] };
     for (const p of posts) g[bucketOf(p)].push(p);
     return g;
   }, [posts]);
@@ -148,10 +148,11 @@ function ClientDashboardInner() {
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-white line-clamp-1">{p.title || "Chưa có tiêu đề"}</div>
                             {caption && <div className="text-[11px] text-gray-400 line-clamp-2 mt-0.5">{caption}</div>}
-                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500">
+                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-500 flex-wrap">
                               {p.scheduled_date && <span>{p.scheduled_date}</span>}
+                              {isPostLate(p) && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-500/15 text-red-400 border border-red-500/30">⏰ Trễ hạn</span>}
                               {count > 0 && <span className="flex items-center gap-0.5"><MessageSquare size={10} />{count}</span>}
-                              {p.ads_enabled && <span className="text-orange-400">🎯 Ads</span>}
+                              {p.ads_enabled && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30">🎯 ADS</span>}
                             </div>
                           </div>
                         </div>
@@ -236,7 +237,11 @@ function ClientCalendar({ posts, postsByDate, thumbs, counts, calYear, calMonth,
                 {dayPosts.slice(0, 3).map((p) => {
                   const thumb = thumbs[p.id];
                   const b = bucketOf(p);
-                  const color = b === "approved" ? "bg-green-500/15 text-green-300 border-green-500/30" : b === "revision" ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                  const color = b === "published"
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                    : b === "approved"
+                      ? "bg-green-500/15 text-green-300 border-green-500/30"
+                      : "bg-amber-500/15 text-amber-300 border-amber-500/30";
                   return (
                     <Link key={p.id} href={`/client/post/${p.id}`} className={`flex items-center gap-1 mb-0.5 px-1.5 py-1 rounded text-[10px] truncate border ${color} hover:opacity-80`}>
                       {thumb && <img src={thumb} className="w-4 h-4 object-cover rounded shrink-0" alt="" />}
@@ -258,7 +263,7 @@ function ClientCalendar({ posts, postsByDate, thumbs, counts, calYear, calMonth,
           {unscheduled.slice(0, 20).map((p) => {
             const thumb = thumbs[p.id];
             const b = bucketOf(p);
-            const color = b === "approved" ? "border-green-500/30" : b === "revision" ? "border-red-500/30" : "border-amber-500/30";
+            const color = b === "published" ? "border-emerald-500/30" : b === "approved" ? "border-green-500/30" : "border-amber-500/30";
             return (
               <Link key={p.id} href={`/client/post/${p.id}`} className={`flex items-center gap-2 p-2 rounded-lg border bg-gray-900/50 hover:bg-gray-900 transition ${color}`}>
                 {thumb ? <img src={thumb} className="w-10 h-10 object-cover rounded shrink-0" alt="" /> : <div className="w-10 h-10 rounded bg-gray-800 shrink-0" />}

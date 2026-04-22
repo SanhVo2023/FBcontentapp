@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Eye, Copy, Trash2 } from "lucide-react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
-import { CONTENT_TYPES, POST_STATUSES } from "@/lib/fb-specs";
+import { CONTENT_TYPES, POST_STATUSES, isPostLate } from "@/lib/fb-specs";
 import PostThumbnail from "@/components/PostThumbnail";
 import BrandImage from "@/components/BrandImage";
 import IconButton from "@/components/ui/IconButton";
@@ -61,9 +61,12 @@ export default function TableView({ posts, thumbnails, brands, showBrand, select
 
                 {/* Title */}
                 <td className="px-2 py-2">
-                  <Link href={`/content/${p.id}`} className="text-xs font-medium text-white hover:text-blue-400 transition truncate block">
-                    {p.title || p.text_overlay?.headline || "Untitled"}
-                  </Link>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link href={`/content/${p.id}`} className="text-xs font-medium text-white hover:text-blue-400 transition truncate">
+                      {p.title || p.text_overlay?.headline || "Untitled"}
+                    </Link>
+                    {p.ads_enabled && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30">🎯 ADS</span>}
+                  </div>
                   <p className="text-[10px] text-gray-500 truncate max-w-md">{p.caption_vi || p.caption_en || p.topic || p.prompt?.slice(0, 60)}</p>
                 </td>
 
@@ -81,7 +84,11 @@ export default function TableView({ posts, thumbnails, brands, showBrand, select
 
                 {/* Schedule */}
                 <td className="px-2 py-2 hidden sm:table-cell">
-                  <span className="text-[10px] text-gray-400">{p.scheduled_date || "—"}</span>
+                  {p.scheduled_date ? (
+                    <span className={`text-[10px] ${isPostLate(p) ? "text-red-400 font-semibold" : "text-gray-400"}`}>
+                      {isPostLate(p) && "⏰ "}{p.scheduled_date}
+                    </span>
+                  ) : <span className="text-[10px] text-gray-600">—</span>}
                 </td>
 
                 {/* Brand */}

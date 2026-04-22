@@ -143,8 +143,28 @@ export function useContentHub() {
 
   const activeFilterCount = [filterStatus.length > 0, !!filterContentType, !!filterServiceArea, filterTags.length > 0].filter(Boolean).length;
 
+  // `update` takes the optimistic fast path: mutate local posts immediately so
+  // the kanban card moves on the next frame, then fire the PATCH in the
+  // background. On failure we snap back. Trash/duplicate still do a full
+  // refetch because they change which posts exist, not just one field.
   const handleAction = useCallback(async (action: string, postId: string, extra?: Record<string, unknown>) => {
     setActionMsg(null);
+
+    if (action === "update" && extra) {
+      let prev: PostConfig[] = [];
+      setPosts((pp) => {
+        prev = pp;
+        return pp.map((p) => p.id === postId ? { ...p, ...(extra as Partial<PostConfig>) } : p);
+      });
+      try {
+        await api("/api/posts", { action: "update", post_id: postId, updates: extra });
+      } catch (e: unknown) {
+        setPosts(prev);
+        setError(e instanceof Error ? e.message : "Không cập nhật được");
+      }
+      return;
+    }
+
     try {
       if (action === "trash") {
         await api("/api/posts", { action: "trash", post_id: postId });
@@ -152,8 +172,6 @@ export function useContentHub() {
       } else if (action === "duplicate") {
         await api("/api/posts", { action: "duplicate", post_id: postId });
         setActionMsg("Duplicated");
-      } else if (action === "update") {
-        await api("/api/posts", { action: "update", post_id: postId, updates: extra });
       }
       await loadPosts();
     } catch (e: unknown) {

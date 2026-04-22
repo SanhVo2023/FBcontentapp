@@ -4,7 +4,7 @@ import { memo } from "react";
 import Link from "next/link";
 import { Eye, Copy, Trash2, CalendarDays, GripVertical } from "lucide-react";
 import type { BrandConfig, PostConfig } from "@/lib/fb-specs";
-import { CONTENT_TYPES, POST_STATUSES, isLegacyDraftStatus } from "@/lib/fb-specs";
+import { CONTENT_TYPES, POST_STATUSES, isLegacyDraftStatus, isPostLate } from "@/lib/fb-specs";
 import PostThumbnail from "@/components/PostThumbnail";
 import BrandImage from "@/components/BrandImage";
 import IconButton from "@/components/ui/IconButton";
@@ -22,6 +22,8 @@ function PostCard({ post, thumbnailUrl, brand, showBrand, onAction, dragHandlePr
   const ct = CONTENT_TYPES.find((c) => c.value === post.content_type);
   const legacy = isLegacyDraftStatus(post.status);
   const legacyStatus = legacy ? POST_STATUSES.find((s) => s.value === post.status) : null;
+  const adsEnabled = !!post.ads_enabled;
+  const late = isPostLate(post);
 
   return (
     <div className="bg-gray-900/70 border border-gray-800/50 rounded-xl overflow-hidden hover:border-gray-700 transition group">
@@ -49,12 +51,24 @@ function PostCard({ post, thumbnailUrl, brand, showBrand, onAction, dragHandlePr
           )}
         </div>
 
-        {/* Content type badge */}
-        {ct && (
-          <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${ct.color}/80 text-white backdrop-blur-sm`}>
-            {ct.emoji} {ct.label}
-          </div>
-        )}
+        {/* Content type + Ads badges (bottom-left stack) */}
+        <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 flex-wrap">
+          {ct && (
+            <div className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ct.color}/80 text-white backdrop-blur-sm`}>
+              {ct.emoji} {ct.label}
+            </div>
+          )}
+          {adsEnabled && (
+            <div className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-orange-500/90 text-white backdrop-blur-sm">
+              🎯 ADS
+            </div>
+          )}
+          {late && (
+            <div className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-500/90 text-white backdrop-blur-sm">
+              ⏰ Trễ hạn
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Content */}

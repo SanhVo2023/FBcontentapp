@@ -327,6 +327,15 @@ export default function PostDetailPage() {
               ✓ Khách đã duyệt
             </span>
           )}
+          {adsEnabled && (
+            <button
+              onClick={handleSettingsClick}
+              title="Bài này có cấu hình quảng cáo — click để mở"
+              className="hidden md:inline-flex items-center gap-1 px-2 py-1 bg-orange-500/15 text-orange-300 text-[10px] rounded-lg border border-orange-500/30 hover:bg-orange-500/25"
+            >
+              🎯 ADS
+            </button>
+          )}
 
           <button onClick={handleDuplicate} className="px-2 py-1 bg-gray-800 text-gray-300 text-[10px] rounded-lg hover:bg-gray-700">{T.duplicate}</button>
           <button onClick={handleTrash} className="px-2 py-1 bg-gray-800 text-red-400 text-[10px] rounded-lg hover:bg-red-600/20">{T.trash}</button>
@@ -431,6 +440,47 @@ export default function PostDetailPage() {
 
               {drawerMode === "settings" && (
                 <div className="space-y-3">
+                  {/* Ads Campaign — promoted to top of drawer so the config is front-and-center. */}
+                  <div className={`border rounded-lg p-3 transition ${adsEnabled ? "bg-orange-500/5 border-orange-500/30" : "bg-gray-900/50 border-gray-800"}`}>
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-xs text-gray-200 font-semibold flex items-center gap-1.5">🎯 Quảng cáo / Ads Campaign</span>
+                      <input type="checkbox" checked={adsEnabled} onChange={(e) => setAdsEnabled(e.target.checked)} className="accent-orange-500 w-4 h-4" />
+                    </label>
+                    {!adsEnabled && (
+                      <p className="text-[10px] text-gray-500 mt-1.5">Bật để cấu hình đối tượng, ngân sách và CTA quảng cáo. Khách cần duyệt cả cấu hình quảng cáo khi bật.</p>
+                    )}
+                    {adsEnabled && (
+                      <div className="space-y-2 mt-2 pt-2 border-t border-orange-500/20">
+                        <p className="text-[10px] text-orange-300/80">Cấu hình quảng cáo sẽ đi kèm khi gửi khách duyệt.</p>
+                        <input value={adsName} onChange={(e) => setAdsName(e.target.value)} placeholder="Tên chiến dịch (tự động nếu bỏ trống)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <select value={adsObjective} onChange={(e) => setAdsObjective(e.target.value)} className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none">
+                            {["Awareness", "Traffic", "Engagement", "Leads", "Conversions", "App Installs", "Video Views"].map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                          <input value={adsCta} onChange={(e) => setAdsCta(e.target.value)} placeholder="CTA" className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                        </div>
+                        <input value={adsAudience} onChange={(e) => setAdsAudience(e.target.value)} placeholder="Đối tượng (VD: Nữ 25-45, TP.HCM)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+                        <input value={adsLandingUrl} onChange={(e) => setAdsLandingUrl(e.target.value)} placeholder="Landing URL" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-gray-500 block mb-0.5">Ngân sách/ngày (₫)</label>
+                            <input type="number" value={adsBudgetPerDay || ""} onChange={(e) => setAdsBudgetPerDay(Number(e.target.value) || 0)} placeholder="0" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-gray-500 block mb-0.5">Số ngày chạy</label>
+                            <input type="number" value={adsDurationDays || ""} onChange={(e) => setAdsDurationDays(Number(e.target.value) || 0)} placeholder="7" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
+                          </div>
+                        </div>
+                        {adsBudgetPerDay > 0 && adsDurationDays > 0 && (
+                          <div className="text-[10px] text-gray-400">Tổng ngân sách: <span className="text-orange-400 font-medium">{(adsBudgetPerDay * adsDurationDays).toLocaleString("vi-VN")}₫</span></div>
+                        )}
+                        {post?.ads_campaign_id && (
+                          <div className="text-[10px] text-green-400 bg-green-500/10 rounded px-2 py-1">✓ Đã tạo chiến dịch: {post.ads_campaign_id}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label className="text-[9px] text-gray-500 uppercase block mb-1">{T.topic}</label>
                     <input value={topic} onChange={(e) => setTopic(e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
@@ -468,44 +518,6 @@ export default function PostDetailPage() {
                   <div>
                     <label className="text-[9px] text-gray-500 uppercase block mb-1">{T.schedule}</label>
                     <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
-                  </div>
-
-                  {/* Ads Campaign */}
-                  <div className={`border rounded-lg p-3 transition ${adsEnabled ? "bg-orange-500/5 border-orange-500/30" : "bg-gray-900/50 border-gray-800"}`}>
-                    <label className="flex items-center justify-between cursor-pointer mb-2">
-                      <span className="text-xs text-gray-300 font-medium flex items-center gap-1.5">🎯 Quảng cáo / Ads Campaign</span>
-                      <input type="checkbox" checked={adsEnabled} onChange={(e) => setAdsEnabled(e.target.checked)} className="accent-orange-500 w-4 h-4" />
-                    </label>
-                    {adsEnabled && (
-                      <div className="space-y-2 mt-2 pt-2 border-t border-orange-500/20">
-                        <p className="text-[10px] text-orange-300/80">Cấu hình quảng cáo sẽ đi kèm khi gửi khách duyệt.</p>
-                        <input value={adsName} onChange={(e) => setAdsName(e.target.value)} placeholder="Tên chiến dịch (tự động nếu bỏ trống)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-2 text-xs text-white outline-none" />
-                        <div className="grid grid-cols-2 gap-2">
-                          <select value={adsObjective} onChange={(e) => setAdsObjective(e.target.value)} className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none">
-                            {["Awareness", "Traffic", "Engagement", "Leads", "Conversions", "App Installs", "Video Views"].map((o) => <option key={o} value={o}>{o}</option>)}
-                          </select>
-                          <input value={adsCta} onChange={(e) => setAdsCta(e.target.value)} placeholder="CTA" className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
-                        </div>
-                        <input value={adsAudience} onChange={(e) => setAdsAudience(e.target.value)} placeholder="Đối tượng (VD: Nữ 25-45, TP.HCM)" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
-                        <input value={adsLandingUrl} onChange={(e) => setAdsLandingUrl(e.target.value)} placeholder="Landing URL" className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] text-gray-500 block mb-0.5">Ngân sách/ngày (₫)</label>
-                            <input type="number" value={adsBudgetPerDay || ""} onChange={(e) => setAdsBudgetPerDay(Number(e.target.value) || 0)} placeholder="0" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-gray-500 block mb-0.5">Số ngày chạy</label>
-                            <input type="number" value={adsDurationDays || ""} onChange={(e) => setAdsDurationDays(Number(e.target.value) || 0)} placeholder="7" className="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-[11px] text-white outline-none" />
-                          </div>
-                        </div>
-                        {adsBudgetPerDay > 0 && adsDurationDays > 0 && (
-                          <div className="text-[10px] text-gray-400">Tổng ngân sách: <span className="text-orange-400 font-medium">{(adsBudgetPerDay * adsDurationDays).toLocaleString("vi-VN")}₫</span></div>
-                        )}
-                        {post?.ads_campaign_id && (
-                          <div className="text-[10px] text-green-400 bg-green-500/10 rounded px-2 py-1">✓ Đã tạo chiến dịch: {post.ads_campaign_id}</div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   {/* Tags */}
