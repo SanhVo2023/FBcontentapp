@@ -1,7 +1,15 @@
 import type { BrandConfig, PostConfig } from "./fb-specs";
 import { getPostSpec } from "./fb-specs";
+import type { DesignLanguage } from "./design-extractor";
+import { hasDesignDirection } from "./design-extractor";
 
-type BuildOpts = { includeLogo?: boolean };
+type BuildOpts = {
+  includeLogo?: boolean;
+  /** Creative mode — an abstract description of a reference banner's design
+   *  language. Injected as directional inspiration (NOT a literal template)
+   *  so the model adopts the spirit while keeping creative latitude. */
+  designDirection?: DesignLanguage | null;
+};
 
 export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig, opts: BuildOpts = {}): string {
   const spec = getPostSpec(post.type);
@@ -14,9 +22,28 @@ export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig, opts: 
     `BRAND COLORS: Primary ${brand.color_primary}, Secondary ${brand.color_secondary}, Accent ${brand.color_accent}`,
     `BRAND TONE: ${brand.tone}`,
     `INDUSTRY: ${brand.industry}`,
+  ];
+
+  if (hasDesignDirection(opts.designDirection)) {
+    const d = opts.designDirection;
+    const bullets: string[] = [];
+    if (d.typography)        bullets.push(`- Typography: ${d.typography}`);
+    if (d.composition)       bullets.push(`- Composition: ${d.composition}`);
+    if (d.color_mood)        bullets.push(`- Color mood: ${d.color_mood}`);
+    if (d.visual_style)      bullets.push(`- Visual style: ${d.visual_style}`);
+    if (d.notable_patterns)  bullets.push(`- Notable patterns: ${d.notable_patterns}`);
+    lines.push(
+      ``,
+      `DESIGN DIRECTION (creative inspiration — NOT a literal template):`,
+      ...bullets,
+      `INSTRUCTION: Absorb these cues as creative DIRECTION. Do NOT copy the reference — improvise in its spirit. BRAND COLORS above are the hard palette; "color mood" is atmospheric guidance only. Keep the output FRESH and CREATIVE — surprise us within this aesthetic.`,
+    );
+  }
+
+  lines.push(
     ``,
     `VISUAL SUBJECT: ${post.prompt}`,
-  ];
+  );
 
   if (post.text_overlay) {
     lines.push(``, `TEXT TO RENDER IN THE IMAGE:`);

@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, Download, UserPlus, X } from "lucide-react";
+import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, Download, UserPlus, X, Sparkles, Wand2 } from "lucide-react";
 import type { BrandConfig, PostConfig, PostType } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
+import type { DesignLanguage } from "@/lib/design-extractor";
+import { EMPTY_DESIGN_LANGUAGE } from "@/lib/design-extractor";
 import BrandImage from "@/components/BrandImage";
 import { downloadImage } from "@/lib/download";
 import { T } from "@/lib/ui-text";
+
+type ImageMode = "standard" | "creative";
+type ImageProvider = "gemini" | "seedream";
 
 type Props = {
   post: PostConfig;
@@ -77,6 +82,21 @@ export default function ImageGenPanel({
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [modelUploading, setModelUploading] = useState(false);
 
+  // Mode + provider selectors
+  const [mode, setMode] = useState<ImageMode>("standard");
+  const [imageProvider, setImageProvider] = useState<ImageProvider>("gemini");
+
+  // Creative mode: reference image + extracted design language.
+  // The reference is held as base64 in state (only sent to /api/image-extract,
+  // not saved server-side). The extracted fields ARE sent to /api/generate.
+  const [creativeRefB64, setCreativeRefB64] = useState<string | null>(null);
+  const [creativeRefMime, setCreativeRefMime] = useState<string>("image/png");
+  const [creativeRefPreview, setCreativeRefPreview] = useState<string | null>(null);
+  const [creativeRefUrl, setCreativeRefUrl] = useState<string | null>(null);
+  const [designDirection, setDesignDirection] = useState<DesignLanguage>(EMPTY_DESIGN_LANGUAGE);
+  const [extracting, setExtracting] = useState(false);
+  const hasDD = Object.values(designDirection).some((v) => (v || "").trim().length > 0);
+
   const spec = getPostSpec(postType);
   const activeLogo = selectedLogo || brand?.logo || (brand?.logos?.[0]?.url);
 
@@ -105,10 +125,10 @@ export default function ImageGenPanel({
     setError(null);
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
     const types = Array.from(variants);
-    // Append to pending so concurrent batches can coexist without wiping each other.
+    // Creative mode only sends designDirection if at least one field is filled.
+    const dd = mode === "creative" && hasDD ? designDirection : null;
     setPendingVariants((prev) => [...prev, ...types]);
 
-    // Run all types in parallel — gemini serializes on its side, we don't need a for-await loop
     await Promise.allSettled(types.map(async (type) => {
       try {
         const postPayload: PostConfig = {
@@ -121,7 +141,14 @@ export default function ImageGenPanel({
           use_reference: useRef,
           style,
         };
-        const data = await api("/api/generate", { post: postPayload, brand: brandWithLogo, testMode: false, includeLogo });
+        const data = await api("/api/generate", {
+          post: postPayload,
+          brand: brandWithLogo,
+          testMode: false,
+          includeLogo,
+          provider: imageProvider,
+          designDirection: dd,
+        });
         if (data?.imageBase64) {
           const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
           if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
@@ -133,6 +160,54 @@ export default function ImageGenPanel({
       }
     }));
     showMsg("✨ Đã tạo xong");
+  };
+
+  const handlePickCreativeFile = async (file: File) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(new Error("Read failed"));
+      r.readAsDataURL(file);
+    });
+    setCreativeRefB64(base64);
+    setCreativeRefMime(file.type || "image/png");
+    setCreativeRefUrl(null);
+    setCreativeRefPreview(URL.createObjectURL(file));
+    setDesignDirection(EMPTY_DESIGN_LANGUAGE);
+  };
+
+  const handlePickCreativeFromBrand = (refId: string) => {
+    const ref = brand.references?.find((r) => r.id === refId);
+    if (!ref?.path) return;
+    setCreativeRefB64(null);
+    setCreativeRefUrl(ref.path);
+    setCreativeRefPreview(ref.path);
+    setCreativeRefMime("image/png");
+    setDesignDirection(EMPTY_DESIGN_LANGUAGE);
+  };
+
+  const handleExtractDesign = async () => {
+    if (!creativeRefB64 && !creativeRefUrl) { setError("Chọn hoặc upload ảnh tham khảo trước"); return; }
+    setExtracting(true); setError(null);
+    try {
+      const body: Record<string, unknown> = { brand };
+      if (creativeRefB64) { body.imageBase64 = creativeRefB64; body.mimeType = creativeRefMime; }
+      else if (creativeRefUrl) { body.imageUrl = creativeRefUrl; }
+      const d = await api("/api/image-extract", body);
+      setDesignDirection({
+        typography: d.typography || "",
+        composition: d.composition || "",
+        color_mood: d.color_mood || "",
+        visual_style: d.visual_style || "",
+        notable_patterns: d.notable_patterns || "",
+      });
+      showMsg("✨ Đã phân tích phong cách");
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi phân tích"); }
+    finally { setExtracting(false); }
+  };
+
+  const updateDD = (k: keyof DesignLanguage, v: string) => {
+    setDesignDirection((prev) => ({ ...prev, [k]: v }));
   };
 
   const handleApprove = async (imageId: string) => {
@@ -191,6 +266,133 @@ export default function ImageGenPanel({
 
   return (
     <div className="space-y-3">
+      {/* Mode + Model selector — lives above everything so the user sets
+          intent first. Defaults (Chuẩn + Gemini) match previous behavior. */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-2.5 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-gray-500 uppercase font-semibold">Chế độ</span>
+          <button
+            type="button"
+            onClick={() => setMode("standard")}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition ${mode === "standard" ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+          >
+            <ImageIcon size={11} /> Chuẩn
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("creative")}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition ${mode === "creative" ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+          >
+            <Sparkles size={11} /> Sáng tạo
+          </button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-gray-500 uppercase font-semibold">Model</span>
+          <button
+            type="button"
+            onClick={() => setImageProvider("gemini")}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${imageProvider === "gemini" ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+          >
+            Gemini 3.1
+          </button>
+          <button
+            type="button"
+            onClick={() => setImageProvider("seedream")}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${imageProvider === "seedream" ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+          >
+            Seedream 5.0
+          </button>
+        </div>
+        {imageProvider === "seedream" && (
+          <p className="text-[10px] text-gray-500">
+            🎯 Seedream: prompt-to-image. Logo sẽ được ghép sau khi tạo. Người mẫu / tham khảo từ brand sẽ được mô tả bằng chữ trong prompt.
+          </p>
+        )}
+      </div>
+
+      {/* Creative reference section — appears in Creative mode only.
+          Extracts an abstract design-language description from a reference
+          image via /api/image-extract, then folds it into the prompt as
+          directional inspiration (not a literal template). */}
+      {mode === "creative" && (
+        <div className="bg-gradient-to-br from-purple-500/5 to-purple-600/5 border border-purple-500/30 rounded-lg p-3 space-y-2.5">
+          <div className="flex items-center gap-1.5">
+            <Sparkles size={12} className="text-purple-300" />
+            <span className="text-[11px] text-purple-200 font-semibold">Tham khảo sáng tạo</span>
+            <span className="text-[9px] text-gray-500">AI sẽ hấp thu phong cách, không sao chép</span>
+          </div>
+
+          <div className="flex items-start gap-2">
+            {creativeRefPreview ? (
+              <div className="relative shrink-0">
+                <img src={creativeRefPreview} className="w-20 h-20 rounded object-cover border border-gray-700" alt="" />
+                <button
+                  type="button"
+                  onClick={() => { setCreativeRefB64(null); setCreativeRefUrl(null); setCreativeRefPreview(null); setDesignDirection(EMPTY_DESIGN_LANGUAGE); }}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center text-white"
+                  title="Bỏ ảnh"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ) : (
+              <div className="w-20 h-20 rounded border border-dashed border-gray-700 flex items-center justify-center shrink-0 text-gray-600">
+                <ImageIcon size={20} />
+              </div>
+            )}
+
+            <div className="flex-1 space-y-1.5">
+              <label className="block">
+                <span className="sr-only">Upload ảnh tham khảo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePickCreativeFile(f); e.target.value = ""; }}
+                  className="block w-full text-[10px] text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-purple-600 file:text-white file:text-[10px] file:cursor-pointer"
+                />
+              </label>
+              {(brand.references?.length || 0) > 0 && (
+                <select
+                  onChange={(e) => { if (e.target.value) handlePickCreativeFromBrand(e.target.value); e.target.value = ""; }}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[10px] text-gray-300"
+                  defaultValue=""
+                >
+                  <option value="">— chọn từ Brand References —</option>
+                  {brand.references.map((r) => <option key={r.id} value={r.id}>{r.description || r.id}</option>)}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={handleExtractDesign}
+                disabled={extracting || (!creativeRefB64 && !creativeRefUrl)}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-[11px] rounded"
+              >
+                {extracting ? <><Loader2 className="animate-spin" size={11} /> Đang phân tích...</> : <><Wand2 size={11} /> Phân tích phong cách</>}
+              </button>
+            </div>
+          </div>
+
+          {hasDD && (
+            <div className="space-y-1.5 border-t border-purple-500/20 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-purple-300/70 uppercase font-semibold">Design language (có thể chỉnh)</span>
+                <button type="button" onClick={() => setDesignDirection(EMPTY_DESIGN_LANGUAGE)} className="text-[9px] text-gray-500 hover:text-gray-300">Xoá</button>
+              </div>
+              {(["typography", "composition", "color_mood", "visual_style", "notable_patterns"] as const).map((k) => (
+                <div key={k}>
+                  <label className="text-[9px] text-gray-500 capitalize">{k.replace("_", " ")}</label>
+                  <input
+                    value={designDirection[k]}
+                    onChange={(e) => updateDD(k, e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[10px] text-gray-200 outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Brand + Logo selector */}
       {brand && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 space-y-2.5">
