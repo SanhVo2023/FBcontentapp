@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { generateFromText, generateFromMultipleImages } from "@/lib/gemini";
-import { generateImageSeedream } from "@/lib/seedream";
+import { generateImageSeedream, seedreamSizeForSpec } from "@/lib/seedream";
 import { compositeLogoBottomRight } from "@/lib/image-composite";
 import { buildFBBannerPrompt } from "@/lib/prompt-builder";
 import { getPostSpec } from "@/lib/fb-specs";
@@ -38,18 +38,20 @@ export async function POST(req: NextRequest) {
       // image inputs — the logo is composited post-hoc with sharp so branding
       // stays consistent across providers.
       //
-      // Default to 1K because Netlify functions cap at 10s on the Starter
-      // plan, and 2K/3K generation routinely takes 15–30s which triggers a
-      // proxy timeout (the "Inactivity Timeout" HTML page). Sharp upscales
-      // to the FB spec afterwards — 1K → 1080×1080 is imperceptible.
-      // If we move to Pro (26s cap), bumping to "2K" here is safe.
+      // Seedream 5.0 requires explicit WIDTHxHEIGHT dimensions (the "2K"
+      // preset is rejected on this model variant). seedreamSizeForSpec maps
+      // the FB spec to a ~1-megapixel Seedream size that matches the aspect
+      // ratio. We keep output around 1 MP because Netlify Starter-plan
+      // functions cap at 10s and 2K+ generation blows past that. Sharp
+      // upscales to the exact FB spec afterwards.
+      const seedSize = seedreamSizeForSpec(spec.width, spec.height);
       const t0 = Date.now();
       raw = await generateImageSeedream({
         prompt,
-        size: "1K",
+        size: seedSize,
         outputFormat: "png",
       });
-      console.log(`[seedream] generated in ${Date.now() - t0}ms`);
+      console.log(`[seedream] ${seedSize} generated in ${Date.now() - t0}ms`);
 
       if (includeLogo && brand.logo && /^https?:/i.test(brand.logo)) {
         try {

@@ -1,22 +1,31 @@
 // Byteplus Ark / Seedream 5.0 image generation client.
-// API reference: https://ark.ap-southeast.bytepluses.com/api/v3/images/generations
+// API docs: https://docs.byteplus.com/en/docs/ModelArk/1824121
+// Endpoint: POST https://ark.ap-southeast.bytepluses.com/api/v3/images/generations
 // The key lives in ARK_API_KEY (Netlify env var + .env.local for dev).
+//
+// Important: Seedream 5.0 (model "seedream-5-0-260128") accepts size in
+// TWO formats:
+//   1. Preset strings "2K" / "3K" / "4K" — BUT only on some model variants.
+//      The 5.0 main model will reject these with:
+//        "size must be one of 'WIDTHxHEIGHT' ..."
+//   2. Explicit dimensions "WIDTHxHEIGHT" (e.g. "1024x1024", "1280x672").
+// We always pass explicit dimensions to be safe across variants.
+//
+// Response shape (per docs) is OpenAI-style:
+//   { model, created, data: [{ url, size }], usage: {...} }
 
 const ARK_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations";
 const MODEL_ID = "seedream-5-0-260128";
 
-export type SeedreamSize = "1K" | "2K" | "3K" | "4K";
 export type SeedreamFormat = "png" | "jpeg";
 
 type ArkSuccess = {
-  // Seedream responses include a single image_url for single-image generations,
-  // plus a parallel `data` / `images` array for multi-image cases. We only
-  // need one image per call, so we accept either shape.
+  model?: string;
+  created?: number;
+  data?: Array<{ url?: string; size?: string; b64_json?: string }>;
+  // Legacy/alternate shapes (kept for resilience in case Seedream updates).
   image_url?: string;
-  data?: Array<{ url?: string; b64_json?: string }>;
   images?: Array<string | { url?: string; b64_json?: string }>;
-  request_id?: string;
-  model_version?: string;
 };
 
 type ArkError = {
@@ -26,25 +35,22 @@ type ArkError = {
 
 export async function generateImageSeedream(input: {
   prompt: string;
-  size?: SeedreamSize;
+  /** Explicit dimensions as "WIDTHxHEIGHT" (e.g. "1024x1024"). Required. */
+  size: string;
   outputFormat?: SeedreamFormat;
-  image?: string | string[]; // optional — base64 or URL; we don't pass this from creative mode
+  image?: string | string[];
 }): Promise<{ buffer: Buffer; mimeType: string }> {
   const key = process.env.ARK_API_KEY;
   if (!key) throw new Error("ARK_API_KEY chưa cấu hình — thêm vào Netlify env và .env.local");
 
   const outputFormat = input.outputFormat || "png";
-  const size = input.size || "2K";
 
   const body: Record<string, unknown> = {
     model: MODEL_ID,
     prompt: input.prompt,
-    size,
+    size: input.size,
     output_format: outputFormat,
     watermark: false,
-    // Ask Seedream for inline base64 whenever possible — avoids a second
-    // round-trip to a CDN URL that might be region-locked or short-lived.
-    response_format: "b64_json",
   };
   if (input.image) body.image = input.image;
 
@@ -59,8 +65,6 @@ export async function generateImageSeedream(input: {
 
   const text = await res.text();
   if (!res.ok) {
-    // Surface the raw response body to server logs so we can debug failures
-    // that don't match ArkError's shape.
     console.error("[seedream] HTTP", res.status, "response:", text.slice(0, 500));
     let msg = `Seedream HTTP ${res.status}`;
     try {
@@ -78,19 +82,19 @@ export async function generateImageSeedream(input: {
     throw new Error("Seedream trả về phản hồi không hợp lệ");
   }
 
-  // Pull the first image out of the union of shapes Seedream can return.
+  // Primary shape per docs: { data: [{ url }] }
   let imageUrl: string | undefined;
   let inlineB64: string | undefined;
 
-  if (json.image_url) imageUrl = json.image_url;
   if (json.data?.length) {
-    imageUrl = imageUrl || json.data[0].url;
-    inlineB64 = inlineB64 || json.data[0].b64_json;
+    imageUrl = json.data[0].url;
+    inlineB64 = json.data[0].b64_json;
   }
-  if (json.images?.length) {
+  if (!imageUrl && !inlineB64 && json.image_url) imageUrl = json.image_url;
+  if (!imageUrl && !inlineB64 && json.images?.length) {
     const first = json.images[0];
-    if (typeof first === "string") imageUrl = imageUrl || first;
-    else { imageUrl = imageUrl || first.url; inlineB64 = inlineB64 || first.b64_json; }
+    if (typeof first === "string") imageUrl = first;
+    else { imageUrl = first.url; inlineB64 = first.b64_json; }
   }
 
   if (!imageUrl && !inlineB64) {
@@ -104,7 +108,6 @@ export async function generateImageSeedream(input: {
     return { buffer: Buffer.from(inlineB64, "base64"), mimeType };
   }
 
-  // Fallback: fetch the hosted image → bytes.
   const imgRes = await fetch(imageUrl!);
   if (!imgRes.ok) {
     console.error("[seedream] image fetch failed", imgRes.status, imageUrl);
@@ -112,4 +115,24 @@ export async function generateImageSeedream(input: {
   }
   const arrayBuf = await imgRes.arrayBuffer();
   return { buffer: Buffer.from(arrayBuf), mimeType };
+}
+
+/**
+ * Map the FB spec dimensions to a Seedream-compatible size string.
+ * Targets ≈1 megapixel output (fits within Netlify's 10s function timeout)
+ * while preserving the post's aspect ratio. Sharp then upscales to the
+ * exact FB spec afterwards with no visible quality loss.
+ */
+export function seedreamSizeForSpec(width: number, height: number): string {
+  const aspect = width / height;
+  // 1-megapixel targets, nearest Seedream-friendly even dimensions.
+  if (Math.abs(aspect - 1) < 0.05) return "1024x1024";                 // square
+  if (aspect > 2.5) return "1344x512";                                 // cover (2.63:1)
+  if (aspect > 1.5) return "1280x672";                                 // wide / landscape (1.91:1)
+  if (aspect < 0.7) return "768x1344";                                 // story / portrait (9:16)
+  // Fallback: compute from ratio, clamped to a 1MP budget.
+  const budget = 1024 * 1024;
+  const h = Math.round(Math.sqrt(budget / aspect) / 32) * 32;
+  const w = Math.round((h * aspect) / 32) * 32;
+  return `${w}x${h}`;
 }
