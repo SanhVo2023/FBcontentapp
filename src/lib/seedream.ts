@@ -15,7 +15,13 @@
 //   { model, created, data: [{ url, size }], usage: {...} }
 
 const ARK_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations";
-const MODEL_ID = "seedream-5-0-260128";
+// Seedream 4.5 full model (not lite). Per docs:
+//   - Min pixel count: 2560×1440 = 3,686,400
+//   - Max pixel count: 4096×4096 = 16,777,216
+//   - Aspect ratio must be within [1/16, 16]
+//   - Preset "2K" / "4K" also accepted; we use explicit dimensions to pin
+//     the aspect ratio per FB post type.
+const MODEL_ID = "seedream-4-5";
 
 export type SeedreamFormat = "png" | "jpeg";
 
@@ -118,21 +124,24 @@ export async function generateImageSeedream(input: {
 }
 
 /**
- * Map the FB spec dimensions to a Seedream-compatible size string.
- * Targets ≈1 megapixel output (fits within Netlify's 10s function timeout)
- * while preserving the post's aspect ratio. Sharp then upscales to the
- * exact FB spec afterwards with no visible quality loss.
+ * Map the FB spec dimensions to a Seedream 4.5-compatible size string.
+ * Seedream 4.5 REQUIRES w*h >= 3,686,400 pixels — we target just above that
+ * floor to keep generation within Netlify's function timeout while
+ * preserving each post type's aspect ratio. Sharp downscales to the exact
+ * FB spec afterwards.
  */
 export function seedreamSizeForSpec(width: number, height: number): string {
   const aspect = width / height;
-  // 1-megapixel targets, nearest Seedream-friendly even dimensions.
-  if (Math.abs(aspect - 1) < 0.05) return "1024x1024";                 // square
-  if (aspect > 2.5) return "1344x512";                                 // cover (2.63:1)
-  if (aspect > 1.5) return "1280x672";                                 // wide / landscape (1.91:1)
-  if (aspect < 0.7) return "768x1344";                                 // story / portrait (9:16)
-  // Fallback: compute from ratio, clamped to a 1MP budget.
-  const budget = 1024 * 1024;
-  const h = Math.round(Math.sqrt(budget / aspect) / 32) * 32;
-  const w = Math.round((h * aspect) / 32) * 32;
+  // Pinned sizes per common FB aspect ratio, all ≥3.7 MP.
+  if (Math.abs(aspect - 1) < 0.05)  return "2048x2048";  // 4.19 MP — square, carousel, ad-square
+  if (aspect > 2.5)                 return "3136x1216";  // 3.81 MP — cover (2.63:1)
+  if (aspect > 1.5)                 return "2656x1408";  // 3.74 MP — wide, ad-landscape (≈1.91:1)
+  if (aspect < 0.7)                 return "1472x2624";  // 3.86 MP — story / reel (9:16)
+  // Fallback: derive from aspect, land just above the 3,686,400-px floor.
+  const targetPixels = 3_800_000;
+  let h = Math.max(1440, Math.round(Math.sqrt(targetPixels / aspect) / 32) * 32);
+  let w = Math.max(1440, Math.round((h * aspect) / 32) * 32);
+  // Safety: if rounding knocked us under the floor, bump up.
+  while (w * h < 3_686_400) { h += 32; w = Math.round((h * aspect) / 32) * 32; }
   return `${w}x${h}`;
 }
