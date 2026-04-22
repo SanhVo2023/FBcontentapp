@@ -37,12 +37,19 @@ export async function POST(req: NextRequest) {
       // Seedream = prompt-to-image. We don't feed logo/model/reference as
       // image inputs — the logo is composited post-hoc with sharp so branding
       // stays consistent across providers.
-      const seedSize = spec.width >= 1536 ? "3K" : "2K";
+      //
+      // Default to 1K because Netlify functions cap at 10s on the Starter
+      // plan, and 2K/3K generation routinely takes 15–30s which triggers a
+      // proxy timeout (the "Inactivity Timeout" HTML page). Sharp upscales
+      // to the FB spec afterwards — 1K → 1080×1080 is imperceptible.
+      // If we move to Pro (26s cap), bumping to "2K" here is safe.
+      const t0 = Date.now();
       raw = await generateImageSeedream({
         prompt,
-        size: seedSize,
+        size: "1K",
         outputFormat: "png",
       });
+      console.log(`[seedream] generated in ${Date.now() - t0}ms`);
 
       if (includeLogo && brand.logo && /^https?:/i.test(brand.logo)) {
         try {

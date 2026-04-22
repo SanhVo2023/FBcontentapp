@@ -5,7 +5,7 @@
 const ARK_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations";
 const MODEL_ID = "seedream-5-0-260128";
 
-export type SeedreamSize = "2K" | "3K" | "4K";
+export type SeedreamSize = "1K" | "2K" | "3K" | "4K";
 export type SeedreamFormat = "png" | "jpeg";
 
 type ArkSuccess = {
