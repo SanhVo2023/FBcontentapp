@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
       raw = await generateImageSeedream({
         prompt,
         size: seedSize,
-        outputFormat: "png",
       });
       console.log(`[seedream] ${seedSize} generated in ${Date.now() - t0}ms`);
 

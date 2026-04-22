@@ -23,8 +23,6 @@ const ARK_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generatio
 //     the aspect ratio per FB post type.
 const MODEL_ID = "seedream-4-5-251128";
 
-export type SeedreamFormat = "png" | "jpeg";
-
 type ArkSuccess = {
   model?: string;
   created?: number;
@@ -41,21 +39,25 @@ type ArkError = {
 
 export async function generateImageSeedream(input: {
   prompt: string;
-  /** Explicit dimensions as "WIDTHxHEIGHT" (e.g. "1024x1024"). Required. */
+  /** Explicit dimensions as "WIDTHxHEIGHT" (e.g. "2048x2048"). Required for 4.5. */
   size: string;
-  outputFormat?: SeedreamFormat;
   image?: string | string[];
 }): Promise<{ buffer: Buffer; mimeType: string }> {
   const key = process.env.ARK_API_KEY;
   if (!key) throw new Error("ARK_API_KEY chưa cấu hình — thêm vào Netlify env và .env.local");
 
-  const outputFormat = input.outputFormat || "png";
-
+  // Verified against the real API with curl on 2026-04-22:
+  //   - `output_format` is REJECTED on seedream-4-5-251128 ("not supported
+  //     by the current model"). Seedream returns JPEG by default.
+  //   - `response_format: "b64_json"` DOES work — returns inline base64 so
+  //     we skip the second hop to Seedream's signed TOS URL. That matters
+  //     for Netlify's 10s function timeout on Starter plan.
+  //   - `watermark: false` is accepted.
   const body: Record<string, unknown> = {
     model: MODEL_ID,
     prompt: input.prompt,
     size: input.size,
-    output_format: outputFormat,
+    response_format: "b64_json",
     watermark: false,
   };
   if (input.image) body.image = input.image;
@@ -108,7 +110,9 @@ export async function generateImageSeedream(input: {
     throw new Error("Seedream trả về không có ảnh");
   }
 
-  const mimeType = outputFormat === "jpeg" ? "image/jpeg" : "image/png";
+  // Seedream returns JPEG by default. Sharp handles both PNG and JPEG
+  // inputs transparently, so the mime is advisory for downstream code.
+  const mimeType = "image/jpeg";
 
   if (inlineB64) {
     return { buffer: Buffer.from(inlineB64, "base64"), mimeType };
