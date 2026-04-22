@@ -837,3 +837,58 @@ export async function getComment(id: string): Promise<PostComment | null> {
   if (error) return null;
   return toPostComment(data as PostCommentRow);
 }
+
+// ============================================
+// JOBS — async task tracking for AI image gen
+// ============================================
+
+export type JobStatus = "pending" | "done" | "failed";
+
+export type Job = {
+  id: string;
+  post_id: string | null;
+  kind: string;
+  status: JobStatus;
+  payload: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function createJob(input: {
+  kind: string;
+  post_id?: string | null;
+  payload?: Record<string, unknown>;
+}): Promise<Job> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .insert({
+      kind: input.kind,
+      post_id: input.post_id || null,
+      payload: input.payload || {},
+      status: "pending",
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Job;
+}
+
+export async function getJob(id: string): Promise<Job | null> {
+  const { data, error } = await supabase.from("jobs").select("*").eq("id", id).single();
+  if (error) return null;
+  return data as Job;
+}
+
+export async function updateJob(
+  id: string,
+  updates: { status?: JobStatus; result?: Record<string, unknown> | null; error?: string | null }
+): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.status !== undefined) patch.status = updates.status;
+  if (updates.result !== undefined) patch.result = updates.result;
+  if (updates.error !== undefined) patch.error = updates.error;
+  const { error } = await supabase.from("jobs").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}

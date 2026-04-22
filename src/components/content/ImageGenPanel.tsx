@@ -119,18 +119,33 @@ export default function ImageGenPanel({
   // again while variants are in flight just appends more to the pending list.
   // The per-variant skeleton tiles signal progress; the button itself shows
   // only a small pending count, not a disabled state.
+  // Generation goes through a Netlify Background Function so Seedream's
+  // ~13s wall-time doesn't blow past the 10s sync cap. Flow per variant:
+  //   1. POST /api/generate-start → returns { job_id } in <1s
+  //   2. Poll /api/generate-poll?id=X every 2s until status=done|failed
+  //   3. On done, the background worker has already written post_images +
+  //      uploaded to R2 — we just refresh the grid.
+  const pollJob = async (jobId: string, signal?: { cancelled: boolean }) => {
+    const maxAttempts = 90;        // 3 minutes at 2s intervals
+    for (let i = 0; i < maxAttempts; i++) {
+      if (signal?.cancelled) throw new Error("Cancelled");
+      await new Promise((res) => setTimeout(res, 2000));
+      const p = await fetch(`/api/generate-poll?id=${jobId}`, { cache: "no-store" }).then((r) => r.json());
+      if (p.status === "done") return p.result;
+      if (p.status === "failed") throw new Error(p.error || "Background job failed");
+    }
+    throw new Error("Hết thời gian chờ");
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) { setError("Nhập mô tả hình ảnh"); return; }
     if (variants.size === 0) { setError("Chọn ít nhất 1 định dạng"); return; }
     setError(null);
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
     const types = Array.from(variants);
-    // Creative mode only sends designDirection if at least one field is filled.
     const dd = mode === "creative" && hasDD ? designDirection : null;
     setPendingVariants((prev) => [...prev, ...types]);
 
-    // Collect per-variant errors so the user sees *why* a generation failed
-    // instead of just a vanished skeleton tile.
     const errs: string[] = [];
     await Promise.allSettled(types.map(async (type) => {
       try {
@@ -144,18 +159,17 @@ export default function ImageGenPanel({
           use_reference: useRef,
           style,
         };
-        const data = await api("/api/generate", {
+        const { job_id } = await api("/api/generate-start", {
           post: postPayload,
           brand: brandWithLogo,
-          testMode: false,
           includeLogo,
           provider: imageProvider,
           designDirection: dd,
+          variantType: type,
         });
-        if (data?.imageBase64) {
-          const up = await api("/api/upload", { imageBase64: data.imageBase64, brand: brand.brand_id, postId: post.id, title: post.title, type, prompt });
-          if (up?.r2_url && onUploaded) onUploaded(up.r2_url);
-        }
+        if (!job_id) throw new Error("Không tạo được job");
+        const result = await pollJob(job_id);
+        if (result?.r2_url && onUploaded) onUploaded(result.r2_url as string);
       } catch (err: unknown) {
         errs.push(`${type}: ${err instanceof Error ? err.message : "Lỗi"}`);
       }
