@@ -20,10 +20,12 @@ const lite = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" }
 
 export async function POST(req: NextRequest) {
   try {
-    const { brand, post, designDirection } = (await req.json()) as {
+    const { brand, post, designDirection, userDirection, creativeMode } = (await req.json()) as {
       brand: BrandConfig;
       post: PostConfig;
       designDirection?: DesignLanguage | null;
+      userDirection?: string;  // Creative-mode: short hint the user types
+      creativeMode?: boolean;  // When true, omit banner-text fields (no in-image text)
     };
 
     if (!brand?.brand_name || !post) {
@@ -31,9 +33,11 @@ export async function POST(req: NextRequest) {
     }
 
     const caption = (post.caption_vi || post.caption_en || "").slice(0, 400);
-    const headline = post.text_overlay?.headline || "";
-    const subline = post.text_overlay?.subline || "";
-    const cta = post.text_overlay?.cta || "";
+    // Creative mode doesn't bake headline/subline/cta into the image — the
+    // prompt itself decides composition. Standard mode passes them through.
+    const headline = creativeMode ? "" : (post.text_overlay?.headline || "");
+    const subline = creativeMode ? "" : (post.text_overlay?.subline || "");
+    const cta = creativeMode ? "" : (post.text_overlay?.cta || "");
     const currentPrompt = (post.prompt || "").slice(0, 300);
 
     const ddBlock = hasDesignDirection(designDirection)
@@ -48,6 +52,16 @@ export async function POST(req: NextRequest) {
 Both variants should ABSORB this direction (composition, mood, visual rhythm) without copying the reference literally.
 `
       : "";
+
+    const userDirectionBlock = userDirection && userDirection.trim()
+      ? `\n## USER DIRECTION (creative brief from the creator — respect this)\n${userDirection.trim()}\n`
+      : "";
+
+    const overlayBlock = (headline || subline || cta)
+      ? `- Banner headline: ${headline || "—"}
+- Banner subline: ${subline || "—"}
+- Banner CTA: ${cta || "—"}`
+      : `- (Creative mode: no banner text — the prompt decides composition entirely. Do NOT describe any text, words, logos, or captions inside the scene.)`;
 
     const instruction = `You are a senior creative director for Facebook ad visuals. Write TWO distinct image-generation prompts for the post below. Each prompt feeds a text-to-image model (Gemini or Seedream) to produce the banner's visual. Text overlays are added separately, so do NOT mention text/captions in the scene.
 
@@ -65,12 +79,10 @@ Both variants should ABSORB this direction (composition, mood, visual rhythm) wi
 - Content type / angle: ${post.content_type || "general"}
 - Visual style preset: ${post.style || "professional"}
 - Format: ${post.type || "feed-square"}
-- Banner headline: ${headline || "—"}
-- Banner subline: ${subline || "—"}
-- Banner CTA: ${cta || "—"}
+${overlayBlock}
 - Caption excerpt (for context, do NOT quote): ${caption || "—"}
 - User's current prompt draft (optional starting point): ${currentPrompt || "—"}
-${ddBlock}
+${userDirectionBlock}${ddBlock}
 
 ## TASK
 Return TWO prompts that approach the same post from DIFFERENT creative angles:

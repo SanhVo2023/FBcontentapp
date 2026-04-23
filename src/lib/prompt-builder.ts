@@ -45,11 +45,16 @@ export function buildFBBannerPrompt(post: PostConfig, brand: BrandConfig, opts: 
     `VISUAL SUBJECT: ${post.prompt}`,
   );
 
-  if (post.text_overlay) {
+  // Text-overlay block only prints when at least one field is filled.
+  // Creative mode passes no overlay text so this block is skipped entirely
+  // and the prompt decides its own composition (no baked-in headline).
+  const ov = post.text_overlay;
+  const hasOverlayText = ov && (ov.headline || ov.subline || ov.cta);
+  if (hasOverlayText) {
     lines.push(``, `TEXT TO RENDER IN THE IMAGE:`);
-    if (post.text_overlay.headline) lines.push(`- HEADLINE (large, prominent): "${post.text_overlay.headline}"`);
-    if (post.text_overlay.subline) lines.push(`- SUBLINE (smaller, below headline): "${post.text_overlay.subline}"`);
-    if (post.text_overlay.cta) lines.push(`- CTA BUTTON/TEXT (bold, contrasting): "${post.text_overlay.cta}"`);
+    if (ov.headline) lines.push(`- HEADLINE (large, prominent): "${ov.headline}"`);
+    if (ov.subline) lines.push(`- SUBLINE (smaller, below headline): "${ov.subline}"`);
+    if (ov.cta) lines.push(`- CTA BUTTON/TEXT (bold, contrasting): "${ov.cta}"`);
     lines.push(`- Text styling: ${brand.font_style}`);
     lines.push(`- ALL TEXT MUST BE PERFECTLY LEGIBLE AND CORRECTLY SPELLED`);
   }

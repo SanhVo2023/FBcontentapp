@@ -102,6 +102,9 @@ export default function ImageGenPanel({
   const [promptA, setPromptA] = useState("");
   const [promptB, setPromptB] = useState("");
   const [suggesting, setSuggesting] = useState(false);
+  // Optional short brief the user types to steer the suggestion
+  // (e.g. "moody nighttime, single figure, negative space").
+  const [userDirection, setUserDirection] = useState("");
 
   const spec = getPostSpec(postType);
   const activeLogo = selectedLogo || brand?.logo || (brand?.logos?.[0]?.url);
@@ -154,6 +157,9 @@ export default function ImageGenPanel({
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
     const types = Array.from(variants);
     const dd = mode === "creative" && hasDD ? designDirection : null;
+    // Creative mode: no banner-text overlay — the prompt decides the
+    // composition. Branding (logo + colors) still applies.
+    const overlay = mode === "creative" ? undefined : { headline, subline, cta };
     setPendingVariants((prev) => [...prev, ...types]);
 
     const errs: string[] = [];
@@ -164,7 +170,7 @@ export default function ImageGenPanel({
           id: post.id,
           type: type as PostConfig["type"],
           prompt: effectivePrompt,
-          text_overlay: { headline, subline, cta },
+          text_overlay: overlay,
           use_model: useModel,
           use_reference: useRef,
           style,
@@ -203,10 +209,12 @@ export default function ImageGenPanel({
   const handleSuggestPrompts = async () => {
     setSuggesting(true); setError(null);
     try {
+      // In creative mode we deliberately OMIT banner text — the two
+      // suggested prompts should decide the composition on their own.
       const postPayload: PostConfig = {
         ...post,
         prompt,
-        text_overlay: { headline, subline, cta },
+        text_overlay: mode === "creative" ? undefined : { headline, subline, cta },
         style,
         type: postType,
       };
@@ -214,6 +222,8 @@ export default function ImageGenPanel({
         brand,
         post: postPayload,
         designDirection: hasDD ? designDirection : null,
+        userDirection: mode === "creative" ? userDirection.trim() : undefined,
+        creativeMode: mode === "creative",
       });
       setPromptA((data.variant_a || "").trim());
       setPromptB((data.variant_b || "").trim());
@@ -451,9 +461,23 @@ export default function ImageGenPanel({
             </div>
           )}
 
-          {/* 2-variant AI prompt suggester — uses post text + design direction
-              to produce two distinct creative prompts (editorial vs conceptual)
-              that the user can edit and generate from independently or both. */}
+          {/* Optional user brief — short hint the AI folds into both
+              prompt variants. Creative-mode only. */}
+          <div className="space-y-1.5 border-t border-purple-500/20 pt-2">
+            <label className="text-[10px] text-gray-500 uppercase font-semibold block">Hướng dẫn của bạn <span className="text-gray-600 normal-case text-[9px]">(tuỳ chọn)</span></label>
+            <textarea
+              value={userDirection}
+              onChange={(e) => setUserDirection(e.target.value)}
+              rows={2}
+              placeholder="VD: không khí buổi tối, một nhân vật duy nhất, nhiều không gian trống. Hoặc để trống để AI tự quyết."
+              className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-[11px] text-gray-200 placeholder-gray-600 resize-y outline-none focus:border-purple-500/40 leading-relaxed"
+            />
+          </div>
+
+          {/* 2-variant AI prompt suggester — blends brand context + design
+              direction + user brief into two distinct creative prompts
+              (editorial vs conceptual). No banner-text overlay in this mode;
+              the prompt itself decides the full composition. */}
           <div className="space-y-2 border-t border-purple-500/20 pt-2">
             <div className="flex items-center gap-1.5">
               <Lightbulb size={12} className="text-amber-300" />
@@ -468,7 +492,7 @@ export default function ImageGenPanel({
             >
               {suggesting
                 ? <><Loader2 className="animate-spin" size={11} /> Đang gợi ý...</>
-                : <><Lightbulb size={11} /> {(promptA || promptB) ? "Gợi ý lại 2 prompt" : "Gợi ý 2 prompt từ nội dung post"}</>}
+                : <><Lightbulb size={11} /> {(promptA || promptB) ? "Gợi ý lại 2 prompt" : "Gợi ý 2 prompt sáng tạo"}</>}
             </button>
 
             {(promptA || promptB) && (
@@ -604,13 +628,16 @@ export default function ImageGenPanel({
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="Mô tả hình ảnh..." className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y outline-none focus:border-blue-500/50" />
       </div>
 
-      {/* Banner text */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-2.5 space-y-1.5">
-        <label className="text-[10px] text-gray-500 uppercase font-medium">{T.text_overlay}</label>
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none" />
-        <input value={subline} onChange={(e) => setSubline(e.target.value)} placeholder="Subline" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
-        <input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="CTA" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-blue-400 outline-none" />
-      </div>
+      {/* Banner text — only in Standard mode. Creative mode lets the prompt
+          decide the composition without any baked-in text overlay. */}
+      {mode === "standard" && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-2.5 space-y-1.5">
+          <label className="text-[10px] text-gray-500 uppercase font-medium">{T.text_overlay}</label>
+          <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white font-bold outline-none" />
+          <input value={subline} onChange={(e) => setSubline(e.target.value)} placeholder="Subline" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-white outline-none" />
+          <input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="CTA" className="w-full bg-gray-800 border border-gray-700 rounded px-2.5 py-1.5 text-xs text-blue-400 outline-none" />
+        </div>
+      )}
 
       {/* Style + Post type */}
       <div className="grid grid-cols-2 gap-2">
