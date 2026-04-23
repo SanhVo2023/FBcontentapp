@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, Download, UserPlus, X, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, Image as ImageIcon, Check, Copy, Eye, Plus, Trash2, Download, UserPlus, X, Sparkles, Wand2, Lightbulb } from "lucide-react";
 import type { BrandConfig, PostConfig, PostType } from "@/lib/fb-specs";
 import { FB_POST_TYPES, FB_STYLES, getPostSpec } from "@/lib/fb-specs";
 import type { PostImageRow } from "@/lib/db";
@@ -97,6 +97,12 @@ export default function ImageGenPanel({
   const [extracting, setExtracting] = useState(false);
   const hasDD = Object.values(designDirection).some((v) => (v || "").trim().length > 0);
 
+  // Two AI-suggested prompt variants — editorial/literal (A) and
+  // conceptual/metaphorical (B). Generated from post text + design direction.
+  const [promptA, setPromptA] = useState("");
+  const [promptB, setPromptB] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+
   const spec = getPostSpec(postType);
   const activeLogo = selectedLogo || brand?.logo || (brand?.logos?.[0]?.url);
 
@@ -137,8 +143,12 @@ export default function ImageGenPanel({
     throw new Error("Hết thời gian chờ");
   };
 
-  const handleGenerate = async () => {
-    if (!prompt.trim()) { setError("Nhập mô tả hình ảnh"); return; }
+  // Shared generation loop. `promptOverride` lets Creative-mode variant
+  // buttons (Tạo với A / Tạo với B) reuse the same flow with a different
+  // image prompt without touching the user's main prompt textarea.
+  const runGenerate = async (promptOverride?: string) => {
+    const effectivePrompt = (promptOverride || prompt).trim();
+    if (!effectivePrompt) { setError("Nhập mô tả hình ảnh"); return; }
     if (variants.size === 0) { setError("Chọn ít nhất 1 định dạng"); return; }
     setError(null);
     const brandWithLogo = { ...brand, logo: activeLogo || brand.logo };
@@ -153,7 +163,7 @@ export default function ImageGenPanel({
           ...post,
           id: post.id,
           type: type as PostConfig["type"],
-          prompt,
+          prompt: effectivePrompt,
           text_overlay: { headline, subline, cta },
           use_model: useModel,
           use_reference: useRef,
@@ -180,6 +190,36 @@ export default function ImageGenPanel({
     }));
     if (errs.length) setError(errs.join(" • "));
     else showMsg("✨ Đã tạo xong");
+  };
+
+  const handleGenerate = () => runGenerate();
+  const handleGenerateWithPrompt = (p: string) => runGenerate(p);
+  const handleGenerateBoth = async () => {
+    // Fire both variants in parallel so Seedream's ~13s each happens
+    // concurrently, not sequentially.
+    await Promise.all([runGenerate(promptA), runGenerate(promptB)]);
+  };
+
+  const handleSuggestPrompts = async () => {
+    setSuggesting(true); setError(null);
+    try {
+      const postPayload: PostConfig = {
+        ...post,
+        prompt,
+        text_overlay: { headline, subline, cta },
+        style,
+        type: postType,
+      };
+      const data = await api("/api/image-prompt-suggest", {
+        brand,
+        post: postPayload,
+        designDirection: hasDD ? designDirection : null,
+      });
+      setPromptA((data.variant_a || "").trim());
+      setPromptB((data.variant_b || "").trim());
+      showMsg("💡 Đã có 2 prompt — chỉnh tuỳ ý rồi tạo");
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Lỗi gợi ý prompt"); }
+    finally { setSuggesting(false); }
   };
 
   const handlePickCreativeFile = async (file: File) => {
@@ -410,6 +450,78 @@ export default function ImageGenPanel({
               ))}
             </div>
           )}
+
+          {/* 2-variant AI prompt suggester — uses post text + design direction
+              to produce two distinct creative prompts (editorial vs conceptual)
+              that the user can edit and generate from independently or both. */}
+          <div className="space-y-2 border-t border-purple-500/20 pt-2">
+            <div className="flex items-center gap-1.5">
+              <Lightbulb size={12} className="text-amber-300" />
+              <span className="text-[11px] text-amber-200 font-semibold">Gợi ý prompt sáng tạo</span>
+              <span className="text-[9px] text-gray-500">AI soạn 2 góc nhìn khác nhau</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSuggestPrompts}
+              disabled={suggesting}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 disabled:bg-gray-700 disabled:text-gray-500 text-amber-200 text-[11px] rounded border border-amber-500/30"
+            >
+              {suggesting
+                ? <><Loader2 className="animate-spin" size={11} /> Đang gợi ý...</>
+                : <><Lightbulb size={11} /> {(promptA || promptB) ? "Gợi ý lại 2 prompt" : "Gợi ý 2 prompt từ nội dung post"}</>}
+            </button>
+
+            {(promptA || promptB) && (
+              <div className="space-y-2">
+                <div className="bg-gray-900/70 border border-gray-800 rounded p-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] text-blue-300 uppercase font-semibold">Variant A · Editorial / Thực</span>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateWithPrompt(promptA)}
+                      disabled={!promptA.trim() || variants.size === 0}
+                      className="text-[10px] px-2 py-0.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded"
+                    >
+                      Tạo với A
+                    </button>
+                  </div>
+                  <textarea
+                    value={promptA}
+                    onChange={(e) => setPromptA(e.target.value)}
+                    rows={3}
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[11px] text-gray-200 resize-y outline-none leading-relaxed"
+                  />
+                </div>
+                <div className="bg-gray-900/70 border border-gray-800 rounded p-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] text-purple-300 uppercase font-semibold">Variant B · Conceptual / Ẩn dụ</span>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateWithPrompt(promptB)}
+                      disabled={!promptB.trim() || variants.size === 0}
+                      className="text-[10px] px-2 py-0.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded"
+                    >
+                      Tạo với B
+                    </button>
+                  </div>
+                  <textarea
+                    value={promptB}
+                    onChange={(e) => setPromptB(e.target.value)}
+                    rows={3}
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-[11px] text-gray-200 resize-y outline-none leading-relaxed"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerateBoth}
+                  disabled={!promptA.trim() || !promptB.trim() || variants.size === 0}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white text-[11px] font-semibold rounded"
+                >
+                  <Sparkles size={11} /> Tạo cả A và B ({variants.size * 2} ảnh)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
